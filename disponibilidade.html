@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Verificação de disponibilidade | Uber Driver</title>
+  <link rel="stylesheet" href="styles.css?v=41">
+  <script src="disponibilidade.js?v=7" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="layout">
+      <div class="header-content">
+        <span class="prototype-label">Protótipo</span>
+        <a class="wordmark" href="index.html" aria-label="Uber Driver — início">
+          <img src="assets/uber-driver-wordmark.webp" alt="" width="2256" height="325">
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="data-page eligibility-page availability-page" aria-labelledby="availability-title">
+      <p class="step-label">Etapa 3 de 3</p>
+      <progress class="step-progress" value="80" max="100" aria-label="Progresso da oferta"></progress>
+
+      <div class="data-intro availability-intro">
+        <h1 id="availability-title" tabindex="-1">Verifique a disponibilidade na sua região</h1>
+        <p id="availability-description">Informe seu CEP para verificar quantas câmeras ainda restam na sua região.</p>
+      </div>
+
+      <form class="data-form availability-pane" id="postal-form" method="dialog" autocomplete="off">
+        <div class="form-fields availability-fields">
+          <div class="form-field">
+            <label for="postal-code">CEP</label>
+            <input id="postal-code" inputmode="numeric" placeholder="00000-000" required
+              pattern="[0-9]{5}-[0-9]{3}" aria-describedby="postal-hint postal-error">
+            <p class="postal-error" id="postal-error" role="alert" hidden></p>
+          </div>
+          <div class="postal-note" id="postal-hint">
+            <span class="region-pin" aria-hidden="true"></span>
+            <p>Você pode digitar o CEP sem hífen.</p>
+          </div>
+        </div>
+
+        <button class="primary-action" type="submit">
+          <span>Consultar meu CEP</span>
+          <span class="arrow" aria-hidden="true"></span>
+        </button>
+      </form>
+
+      <div class="availability-pane availability-feedback" id="availability-feedback" hidden>
+        <div class="availability-panel" id="availability-loading" hidden>
+          <div class="postal-summary">
+            <span>CEP informado</span>
+            <strong id="loading-postal"></strong>
+          </div>
+          <div class="region-loading">
+            <div class="cep-map-stage">
+              <div class="cep-map" id="cep-map" aria-hidden="true"></div>
+              <div class="cep-radar" aria-hidden="true">
+                <span class="cep-radar-center"><span class="region-pin"></span></span>
+              </div>
+              <p class="cep-map-credit" hidden>
+                <a class="cep-vector-credit" href="https://www.openmaptiles.org/" target="_blank" rel="noopener" hidden>© OpenMapTiles</a>
+                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>
+              </p>
+            </div>
+            <div class="region-loading-copy" role="status">
+              <p><strong>Consultando seu CEP…</strong></p>
+              <p>Estamos buscando sua cidade.</p>
+            </div>
+          </div>
+          <button class="primary-action" type="button" disabled>Consultando…</button>
+        </div>
+
+        <div class="availability-panel" id="availability-result" hidden>
+          <div class="postal-summary">
+            <span><strong id="result-region"></strong><span class="postal-summary-label">Região do CEP</span></span>
+            <strong id="result-postal"></strong>
+          </div>
+          <div class="stock-preview">
+            <p><strong class="stock-quantity">3</strong> <span class="stock-caption">câmeras disponíveis em <span id="stock-city"></span></span></p>
+            <span class="stock-context">Simulação</span>
+          </div>
+          <button class="edit-postal" type="button">Alterar CEP</button>
+
+          <a class="primary-action" href="index.html">
+            <span>Voltar para a oferta</span>
+            <span class="arrow" aria-hidden="true"></span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

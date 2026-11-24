@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Questionário da câmera | Uber Driver</title>
+  <link rel="stylesheet" href="styles.css?v=37">
+  <script src="questionario.js?v=8" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="layout">
+      <div class="header-content">
+        <span class="prototype-label">Protótipo</span>
+        <a class="wordmark" href="index.html" aria-label="Uber Driver — início">
+          <img src="assets/uber-driver-wordmark.webp" alt="" width="2256" height="325">
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="question-page" aria-label="Questionário da oferta">
+      <div class="question-progress">
+        <p class="step-label">Etapa 2 de 3</p>
+        <p class="question-review" id="question-step"></p>
+        <progress class="step-progress" value="42" max="100" aria-label="Progresso da promoção"></progress>
+      </div>
+
+      <form class="question-form" method="dialog">
+        <div class="question-intro">
+          <h1 id="question-title" tabindex="-1">Há quanto tempo você dirige por aplicativo?</h1>
+          <p id="question-hint">Escolha a opção mais próxima.</p>
+        </div>
+
+        <fieldset class="quiz-options" aria-labelledby="question-title" aria-describedby="question-hint"></fieldset>
+
+        <button class="primary-action" type="submit">
+          <span>Continuar</span>
+          <span class="arrow" aria-hidden="true"></span>
+        </button>
+      </form>
+    </section>
+  </main>
+
+</body>
+</html>
