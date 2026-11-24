@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000">
   <meta name="description" content="Protótipo da promoção de câmera de segurança para motoristas da Uber.">
   <title>Uber Driver | Protótipo da promoção da câmera</title>
-  <link rel="preload" as="image" href="assets/uber-driver-opening-sequence.webp?v=2" fetchpriority="high"
+  <link rel="preload" as="image" href="assets/uber-driver-opening-frames.webp" fetchpriority="high"
     media="(prefers-reduced-motion: no-preference)">
   <link rel="stylesheet" href="styles.css?v=33">
   <style>
@@ -18,8 +18,8 @@
   <dialog class="site-opening" aria-label="Abertura da prévia Uber Driver">
     <div class="opening-curtain" aria-hidden="true"></div>
     <div class="opening-mark" tabindex="-1" autofocus>
-      <img class="opening-sequence" width="900" height="130" alt="" aria-hidden="true"
-        fetchpriority="high" data-src="assets/uber-driver-opening-sequence.webp?v=2">
+      <canvas class="opening-sequence" width="900" height="130" aria-hidden="true"
+        data-src="assets/uber-driver-opening-frames.webp" data-frames="assets/uber-driver-opening-frames.json"></canvas>
       <span class="opening-final" aria-hidden="true"></span>
     </div>
   </dialog>
@@ -79,10 +79,12 @@
       const wordmark = header.querySelector('.wordmark');
       let morphTimer;
       let deadlineTimer;
+      let frameRequest;
 
       function closeOpening() {
         clearTimeout(morphTimer);
         clearTimeout(deadlineTimer);
+        cancelAnimationFrame(frameRequest);
         if (opening.open) opening.close();
         document.removeEventListener('visibilitychange', onVisibilityChange);
         window.removeEventListener('pagehide', closeOpening);
@@ -96,6 +98,7 @@
         if (!opening.open || opening.classList.contains('opening-leaving')) return;
         clearTimeout(morphTimer);
         clearTimeout(deadlineTimer);
+        cancelAnimationFrame(frameRequest);
         if (reducedMotion.matches) {
           closeOpening();
           return;
@@ -127,14 +130,42 @@
 
       opening.showModal();
       morphTimer = setTimeout(revealHome, 5000);
-      sequence.src = sequence.dataset.src;
-      sequence.decode().then(() => {
+
+      const sheet = new Image();
+      sheet.src = sequence.dataset.src;
+      const timeline = fetch(sequence.dataset.frames).then(response => {
+        if (!response.ok) throw new Error('Quadros da abertura indisponíveis.');
+        return response.json();
+      });
+
+      Promise.all([sheet.decode(), timeline]).then(([, { width, height, patches }]) => {
         if (!opening.open || opening.classList.contains('opening-leaving')) return;
-        // Setting the same source restarts the decoded animation at its first frame.
-        sequence.src = sequence.dataset.src;
+        sequence.width = width;
+        sequence.height = height;
+        const context = sequence.getContext('2d', { alpha: false });
+        if (!context || !Array.isArray(patches) || patches.length === 0) return revealHome();
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, width, height);
         opening.classList.add('opening-playing');
-        clearTimeout(morphTimer);
-        morphTimer = setTimeout(revealHome, 2080);
+        let startedAt;
+        let nextPatch = 0;
+
+        function paintOpening(now) {
+          if (startedAt === undefined) {
+            startedAt = now;
+            clearTimeout(morphTimer);
+            morphTimer = setTimeout(revealHome, 2080);
+          }
+          const elapsed = now - startedAt;
+          // Each patch updates the pixels that changed since the previous frame.
+          while (nextPatch < patches.length && patches[nextPatch][0] <= elapsed) {
+            const [, x, y, w, h, left, top] = patches[nextPatch++];
+            context.drawImage(sheet, x, y, w, h, left, top, w, h);
+          }
+          if (nextPatch < patches.length) frameRequest = requestAnimationFrame(paintOpening);
+        }
+
+        frameRequest = requestAnimationFrame(paintOpening);
       }).catch(revealHome);
     })();
   </script>
