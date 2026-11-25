@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { channels, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports } from './reports.mjs';
 import { HttpError } from './errors.mjs';
+import { journeyPages, journeyTitle, summarizeJourney } from './journey.mjs';
 import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueReminders, queueTest, reconcileOrder, uuid } from './operations.mjs';
 
 function json(data, status = 200, headers = {}) {
@@ -92,13 +93,11 @@ function amend(state, command, at) {
   throw new HttpError(400, 'Ação inválida para esta configuração.');
 }
 
-const trackedPages = ['inicio', 'oferta', 'cadastro', 'questionario', 'regiao', 'analise'];
-const pageTitles = ['Início', 'Sobre a oferta', 'Cadastro', 'Questionário', 'Disponibilidade por região', 'Análise e ofertas'];
-const trackedPageTitles = new Map(trackedPages.map((page, index) => [page, pageTitles[index]]));
+const trackedPages = Object.keys(journeyPages);
 const leadFields = ['id', 'name', 'city', 'origin', 'device'];
 const saleFields = ['id', 'sessionId', 'gateway'];
 const sections = ['overview', 'pages', 'leads', 'audience', 'sales', 'catalog', 'gateways',
-  'tracking', 'utmfy', 'sms', 'queue', 'navigation', 'security'];
+  'tracking', 'activity', 'utmfy', 'sms', 'queue', 'navigation', 'security'];
 
 async function trafficReport(store, since) {
   const visits = await store.readTraffic(since);
@@ -144,7 +143,19 @@ async function viewReport(store, params, time) {
     return { state, data: { ...filterRows(records.rows, params, leadFields), limited: records.limited } };
   }
   if (section === 'sales') return { state, data: filterRows(orders, params, saleFields) };
-  if (['overview', 'pages', 'navigation'].includes(section)) {
+  if (section === 'activity' || section === 'navigation') {
+    const since = overview.daily[0].day;
+    const [events, traffic] = await Promise.all([
+      store.readJourneyEvents(since),
+      section === 'navigation' ? trafficReport(store, since) : undefined,
+    ]);
+    const journey = summarizeJourney(events);
+    const recent = events.slice(0, 30).map(({ page, event, occurred_at }) => ({
+      page: journeyPages[page], title: journeyTitle(page, event), at: occurred_at,
+    }));
+    return { state, data: overview, traffic, journey: { ...journey, recent } };
+  }
+  if (['overview', 'pages'].includes(section)) {
     return { state, data: overview, traffic: await trafficReport(store, overview.daily[0].day) };
   }
   return { state, data: overview };
@@ -160,7 +171,7 @@ function trackedLead(id, visits) {
     origin: 'Jornada acompanhada',
     startedOn: firstDay,
     createdAt: `${firstDay}T00:00:00Z`,
-    steps: trackedPages.filter(page => pages.has(page)).map(page => trackedPageTitles.get(page)),
+    steps: trackedPages.filter(page => pages.has(page)).map(page => journeyPages[page]),
   };
 }
 
@@ -227,6 +238,15 @@ export function adminHandler({ auth, store, now = Date.now }) {
         await recordDemoNavigation(store, { page, session, day: at.slice(0, 10), completedProfile }, at);
         return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
       }
+      if (request.method === 'POST' && route === 'journey-event') {
+        const { page, event, session } = await body(request);
+        if (typeof page !== 'string' || typeof event !== 'string' || !journeyTitle(page, event) ||
+            typeof session !== 'string' || !uuid.test(session)) {
+          throw new HttpError(400, 'Evento de jornada inválido.');
+        }
+        await store.recordJourneyEvent({ page, event, session, day: at.slice(0, 10), occurred_at: at });
+        return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+      }
       if (request.method === 'POST' && route === 'demo-order') {
         const data = await body(request);
         const state = await store.read();
@@ -261,11 +281,13 @@ export function adminHandler({ auth, store, now = Date.now }) {
         const since = reports(url.searchParams, now()).daily[0].day;
         const visits = await store.readTraffic(since, id);
         if (!visits.length) throw new HttpError(404, 'Sessão de teste indisponível no período.');
-        const orders = (await store.read()).orders.filter(order => order.sessionId === id);
+        const [snapshot, events] = await Promise.all([store.read(), store.readJourneyEvents(since, id)]);
+        const orders = snapshot.orders.filter(order => order.sessionId === id);
         const history = visits.toSorted((first, next) => first.day.localeCompare(next.day) ||
           trackedPages.indexOf(first.page) - trackedPages.indexOf(next.page))
-          .map(({ page, day }) => ({ title: trackedPageTitles.get(page), day }));
-        return json({ lead: { ...trackedLead(id, visits), visits: history }, orders });
+          .map(({ page, day }) => ({ title: journeyPages[page], day }));
+        const activity = events.map(({ page, event, occurred_at }) => ({ title: journeyTitle(page, event), at: occurred_at }));
+        return json({ lead: { ...trackedLead(id, visits), visits: history, activity }, orders });
       }
       const salesExport = route === 'export' && url.searchParams.get('kind') === 'sales';
       const orders = ['overview', 'sales'].includes(route) || salesExport ? (await store.read()).orders : [];

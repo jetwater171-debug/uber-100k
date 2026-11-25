@@ -24,6 +24,15 @@
     }
   } catch { return; }
   if (!session?.id) return;
+  function track(event) {
+    if (session.until <= Date.now()) return;
+    fetch('/api/admin?route=journey-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page, event, session: session.id }),
+      keepalive: true,
+    }).catch(() => {});
+  }
   const catalog = async () => {
     if (session.until <= Date.now()) throw new Error('Abra uma nova jornada de teste pelo painel.');
     const response = await fetch('/api/admin?route=demo-catalog', { signal: AbortSignal.timeout(4000) });
@@ -46,7 +55,10 @@
     if (!response.ok) throw Object.assign(new Error(data.error || 'Pedido de teste indisponível.'), { status: response.status });
     return data;
   };
-  window.campaignDemo = Object.freeze({ catalog, createOrder });
+  window.campaignDemo = Object.freeze({ catalog, createOrder, track });
+  window.addEventListener('pageshow', event => {
+    if (event.persisted || performance.getEntriesByType('navigation')[0]?.type === 'back_forward') track('page_return');
+  });
   const completedProfile = page === 'questionario' && campaignFlow.read().profileComplete === true;
   fetch('/api/admin?route=traffic', {
     method: 'POST',

@@ -167,6 +167,25 @@ test('journey orders use server prices and an idempotent request key', async () 
   assert.equal(sales.items[0].id, order.id);
 });
 
+test('journey activity is private, validates page context and deduplicates by session and day', async () => {
+  const { request, login } = fixture();
+  const entry = { page: 'regiao', event: 'lookup_resolved', session: sessionId, postalCode: 'ignored-secret' };
+  assert.equal((await request('journey-event', { body: entry })).status, 401);
+  await login();
+  assert.equal((await request('journey-event', { body: { ...entry, page: 'cadastro' } })).status, 400);
+  assert.equal((await request('traffic', { body: { page: 'regiao', session: sessionId } })).status, 204);
+  for (const event of ['lookup_resolved', 'lookup_resolved', 'page_return']) {
+    assert.equal((await request('journey-event', { body: { ...entry, event } })).status, 204);
+  }
+  const { journey } = await (await request('view', { query: { section: 'activity' } })).json();
+  assert.deepEqual(journey.milestones, [{ name: 'Região encontrada', count: 1 }]);
+  assert.deepEqual(journey.returns, [{ name: 'Disponibilidade por região', count: 1 }]);
+  assert.equal(journey.recent.length, 2);
+  assert.doesNotMatch(JSON.stringify(journey), /ignored-secret/);
+  const { lead } = await (await request('lead', { query: { id: sessionId } })).json();
+  assert.equal(lead.activity.length, 2);
+});
+
 test('configured navigation events are queued once without profile field values', async () => {
   const { request, login } = fixture();
   await login();

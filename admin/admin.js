@@ -7,7 +7,7 @@ const details = document.querySelector('#details');
 const groups = [
   ['Operação', ['overview', 'Visão geral'], ['pages', 'Páginas e funil'], ['leads', 'Leads'], ['audience', 'Público'], ['sales', 'Vendas'], ['catalog', 'Catálogo']],
   ['Integrações', ['gateways', 'Gateways PIX'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy e Pushcut'], ['sms', 'SMS e remarketing'], ['queue', 'Fila de testes']],
-  ['Diagnóstico', ['navigation', 'Saídas por etapa'], ['security', 'Auditoria e segurança']],
+  ['Diagnóstico', ['activity', 'Eventos da jornada'], ['navigation', 'Saídas e retornos'], ['security', 'Auditoria e segurança']],
 ];
 const sectionNames = Object.fromEntries(groups.flatMap(([, ...links]) => links));
 const eventTypes = ['PageView', 'ViewContent', 'Lead', 'InitiateCheckout', 'Purchase'];
@@ -246,7 +246,7 @@ async function render() {
   try {
     const response = await api('view', undefined, { section: active });
     if (current !== sequence || !operator) return;
-    const { data, traffic } = response;
+    const { data, traffic, journey } = response;
     state = response.state;
     const placeholderHistory = (state.audit || []).filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
     const renderers = {
@@ -273,9 +273,14 @@ async function render() {
         panel('Histórico de testes', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' ||
           ['Lembrete de teste registrado', 'Lembretes de teste em lote'].includes(entry.title)))) + '</div>',
       queue: queueView,
-      navigation: () => title('Saídas por etapa', 'Veja até onde as sessões acompanhadas avançaram no período.') + range() + '</div>' +
-        panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
-          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`),
+      activity: () => title('Eventos da jornada', 'Acompanhe as ações registradas no protótipo, da primeira etapa até a seleção.') + range() + '</div>' +
+        '<div class="stack">' + panel('Marcos registrados', bars(journey.milestones), journey.limited ? 'Últimos 1.000 eventos' : '') +
+        panel('Eventos recentes', table(['Quando', 'Página', 'Evento'], journey.recent.map(row =>
+          [date.format(new Date(row.at)), escape(row.page), escape(row.title)]))) + '</div>',
+      navigation: () => title('Saídas e retornos', 'Veja até onde as sessões avançaram e em quais páginas houve retorno pelo navegador.') + range() + '</div>' +
+        '<div class="columns">' + panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
+          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`) +
+        panel('Retornos por página', bars(journey.returns), journey.limited ? 'Últimos 1.000 eventos' : '') + '</div>',
       security: () => title('Auditoria e segurança', 'Histórico das mudanças feitas por operadores neste painel.') + '</div>' +
         panel('Atividade do painel', auditTable(state.audit)),
     };
@@ -449,8 +454,11 @@ view.addEventListener('click', async event => {
       const context = [lead.city, lead.origin, lead.device].filter(Boolean).map(escape).join(' · ');
       const history = lead.visits
         ? lead.visits.map(visit => `${visit.day.split('-').reverse().join('/')} · ${visit.title}`) : lead.steps;
+      const activity = lead.activity?.length
+        ? panel('Eventos registrados', table(['Quando', 'Evento'], lead.activity.map(row =>
+          [date.format(new Date(row.at)), escape(row.title)]))) : '';
       showDetails(lead.name, `<p>${context}</p>
-        <ol class="details-list">${history.map(step => `<li>${escape(step)}</li>`).join('')}</ol>` +
+        <ol class="details-list">${history.map(step => `<li>${escape(step)}</li>`).join('')}</ol>` + activity +
         table(['Pedido', 'Gateway', 'Valor', 'Estado'], orders.map(order =>
           [escape(order.id), escape(order.gateway || '—'), money(order.total), escape(order.status)])));
     }

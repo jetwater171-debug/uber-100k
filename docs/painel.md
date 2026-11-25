@@ -1,6 +1,6 @@
 # Painel da campanha
 
-O painel tem treze seções. Visão geral, funil, cadastros, público, vendas, catálogo, gateways PIX, tracking, UTMfy e Pushcut, SMS, fila de testes, saídas por etapa e auditoria. O [inventário do iFoodbag](auditoria-admin.md) lista o comportamento original e as dependências.
+O painel tem quatorze seções. Visão geral, funil, cadastros, público, vendas, catálogo, gateways PIX, tracking, UTMfy e Pushcut, SMS, fila de testes, eventos da jornada, saídas e retornos, e auditoria. O [inventário do iFoodbag](auditoria-admin.md) lista o comportamento original e as dependências.
 
 ## Abrir no computador
 
@@ -12,7 +12,9 @@ Em **Vendas → Ver pedido**, gere um PIX de teste em um gateway ativo e simule 
 
 Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente ou selecione até 20 e enfileire o lote. A fila mantém um lembrete por pedido e cancela o lembrete pendente se o PIX encerrar antes do processamento. O histórico fica disponível na mesma seção e na auditoria.
 
-**Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas por etapa** mostra a etapa mais avançada registrada para cada sessão no período selecionado.
+**Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas e retornos** mostra a etapa mais avançada por sessão e os retornos gerados pela navegação normal do navegador.
+
+**Eventos da jornada** registra a conclusão do cadastro, o avanço em cada pergunta, a conclusão do quiz, os resultados da consulta de CEP, a análise simulada e a seleção de ofertas. Cada ação é contabilizada uma vez por página, sessão e dia, sem armazenar campos do formulário, CEP ou respostas.
 
 Use **Atualização automática** na Visão geral ou em Páginas e funil para atualizar os relatórios a cada 30 segundos enquanto a aba estiver ativa.
 
@@ -31,7 +33,7 @@ Configurações ausentes mantêm o painel hospedado indisponível.
 
 O painel usa um login compartilhado por senha e limita as tentativas de entrada a dez por origem em cinco minutos. Há uma sessão ativa de até 30 minutos no ambiente. Entrar em outro navegador encerra a sessão anterior. O banco guarda um resumo criptográfico do identificador aleatório do cookie. Sair remove a sessão e alterar a senha invalida as sessões anteriores.
 
-Use `npm run check:supabase` com as variáveis de conexão do projeto de teste no ambiente ou em `.env.local` para conferir a leitura das tabelas de configurações, sessões e visitas. O comando mostra nomes de variáveis ausentes e o resultado das consultas, preservando os valores das chaves.
+Use `npm run check:supabase` com as variáveis de conexão do projeto de teste no ambiente ou em `.env.local` para conferir a leitura das tabelas de configurações, sessões, visitas e eventos. O comando mostra nomes de variáveis ausentes e o resultado das consultas, preservando os valores das chaves.
 
 ## Verificações locais
 

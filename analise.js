@@ -81,7 +81,10 @@ function syncSelection() {
   return offers;
 }
 
-offerList.addEventListener('change', syncSelection);
+offerList.addEventListener('change', () => {
+  syncSelection();
+  window.campaignDemo?.track?.('selection_changed');
+});
 window.addEventListener('pageshow', syncSelection);
 
 function renderSelection() {
@@ -97,6 +100,7 @@ function renderSelection() {
 }
 
 approvedAction.addEventListener('click', () => {
+  window.campaignDemo?.track?.('selection_opened');
   renderSelection();
   demoOrder.hidden = !catalogReady;
   demoOrderCreate.hidden = false;
@@ -116,6 +120,7 @@ demoOrderCreate.addEventListener('click', async () => {
     demoOrderResult.textContent = `Pedido de teste salvo · ${currency.format(order.total / 100)}`;
     demoOrderLink.hidden = false;
   } catch (error) {
+    window.campaignDemo?.track?.('selection_failed');
     demoOrderResult.textContent = error.message;
     if (error.status === 409) {
       await refreshDemoCatalog();
@@ -170,6 +175,7 @@ function advanceReview(elapsed, duration) {
 }
 
 async function runReview() {
+  window.campaignDemo?.track?.('review_started');
   const catalogRequest = refreshDemoCatalog();
   const rows = [...reviewPanel.querySelectorAll('.review-row')];
   reviewProgress.hidden = false;
@@ -213,6 +219,7 @@ async function runReview() {
 
   reviewPage.hidden = true;
   approvedPage.hidden = false;
+  window.campaignDemo?.track?.('review_completed');
   syncSelection();
   reviewAnnouncement.textContent = 'Perfil aprovado na simulação. Confira os itens disponíveis para seleção.';
 }
