@@ -11,7 +11,7 @@
   };
   const page = paths[location.pathname.split('/').at(-1)];
   if (!page) return;
-  const key = 'campaign-analytics-demo-v1';
+  const key = 'campaign-analytics-demo-v2';
   let session;
   try {
     if (new URLSearchParams(location.search).get('analytics') === 'demo') {

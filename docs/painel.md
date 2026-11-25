@@ -8,19 +8,21 @@ Com Node.js 24 instalado, execute `npm run dev` na pasta do projeto e abra [o pa
 
 Na jornada acompanhada, a lista de produtos aplica os preços e a disponibilidade do catálogo do painel. Selecione os produtos e use **Criar pedido de teste** no resumo. O servidor confere o total exibido e usa uma chave por seleção e total para impedir pedidos duplicados em tentativas repetidas.
 
-Em **Vendas → Ver pedido**, gere um PIX de teste em um gateway ativo e simule a confirmação ou o cancelamento. A origem **Jornada acompanhada** identifica os pedidos criados no fluxo. Os demais registros são amostras. Os seis gateways emitem identificadores de simulação sem valor de cobrança. Os eventos do pedido entram na **Fila de testes** conforme a configuração de cada canal e podem ser processados em lotes de até vinte. A confirmação repetida mantém uma única entrada de compra por canal. Os testes de Meta, TikTok, UTMfy, Pushcut e SMSMais também podem ser enfileirados manualmente.
+Em **Vendas → Ver pedido**, gere um PIX de teste em um gateway ativo e simule a confirmação ou o cancelamento. Cada pedido mostrado foi criado pela jornada acompanhada. Os seis gateways emitem identificadores de simulação sem valor de cobrança. Os eventos do pedido entram na **Fila de testes** conforme a configuração de cada canal e podem ser processados em lotes de até vinte. A confirmação repetida mantém uma única entrada de compra por canal. Os testes de Meta, TikTok, UTMfy, Pushcut e SMSMais também podem ser enfileirados manualmente.
 
 Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente ou selecione até 20 e enfileire o lote. A fila mantém um lembrete por pedido e cancela o lembrete pendente se o PIX encerrar antes do processamento. O histórico fica disponível na mesma seção e na auditoria.
 
 **Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas e retornos** mostra a etapa mais avançada por sessão e os retornos gerados pela navegação normal do navegador.
 
-**Vendas** resume pedidos e valores simulados por estado com os mesmos filtros da tabela. Use **Gateways PIX → Consulta de transação** para localizar um pedido de teste pelo identificador ou pelo código gerado. **Público** exporta os agrupamentos de exemplo por cidade, origem, dispositivo e posicionamento.
+**Vendas** resume pedidos de teste registrados por estado com os mesmos filtros da tabela. Use **Gateways PIX → Consulta de transação** para localizar um pedido de teste pelo identificador ou pelo código gerado. **Público** exporta a distribuição das sessões registradas por etapa, sem métricas geradas.
 
 **Eventos da jornada** registra a conclusão do cadastro, o avanço em cada pergunta, a conclusão do quiz, os resultados da consulta de CEP, a análise simulada e a seleção de ofertas. Cada ação é contabilizada uma vez por página, sessão e dia, sem armazenar campos do formulário, CEP ou respostas.
 
 Use **Atualização automática** na Visão geral ou em Páginas e funil para atualizar os relatórios a cada 30 segundos enquanto a aba estiver ativa.
 
-Em **Leads**, filtre as sessões por origem, gateway ou estado do pedido. Clique na linha ou em **Detalhes** para abrir o overlay com resumo da sessão, páginas visitadas, eventos e pedidos. A consulta abre o estado atual do PIX de teste. O link copiado exige login no painel e o JSON contém os dados disponíveis nessa sessão de teste. A exportação CSV usa os filtros da lista.
+Em **Leads**, filtre as sessões por gateway ou estado do pedido. Clique na linha ou em **Detalhes** para abrir o overlay com resumo da sessão, páginas visitadas, eventos e pedidos. A consulta abre o estado atual do PIX de teste. O link copiado exige login no painel e o JSON contém os dados disponíveis nessa sessão de teste. A exportação CSV usa os filtros da lista.
+
+A migração de arquivamento guarda o estado operacional anterior em `campaign_admin_archive` e tira as visitas e eventos antigos dos relatórios. O catálogo e as configurações continuam disponíveis. Os relatórios começam vazios e passam a mostrar as ações registradas no ambiente atual.
 
 Na **Visão geral**, escolha um período padrão ou aplique um intervalo de até 90 dias. As opções de catálogo e comparação de gateways ficam pendentes até você clicar em **Salvar configurações**.
 

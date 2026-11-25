@@ -125,11 +125,13 @@ async function trafficReport(store, since, until) {
   const visits = await store.readTraffic(since, undefined, until);
   const counts = new Map();
   const dayCounts = new Map();
+  const sessionsByPage = new Map(trackedPages.map(page => [page, new Set()]));
   const stageByPage = new Map(trackedPages.map((page, index) => [page, index]));
   const furthestStageBySession = new Map();
   for (const row of visits) {
     counts.set(row.page, (counts.get(row.page) || 0) + 1);
     dayCounts.set(row.day, (dayCounts.get(row.day) || 0) + 1);
+    sessionsByPage.get(row.page).add(row.session);
     const stage = stageByPage.get(row.page);
     if (stage > (furthestStageBySession.get(row.session) ?? -1)) furthestStageBySession.set(row.session, stage);
   }
@@ -137,6 +139,7 @@ async function trafficReport(store, since, until) {
   for (const stage of furthestStageBySession.values()) stageCounts[stage]++;
   return {
     rows: trackedPages.map(page => ({ page, count: counts.get(page) || 0 })),
+    sessionsByPage: trackedPages.map(page => ({ page, count: sessionsByPage.get(page).size })),
     furthestPages: trackedPages.map((page, index) => ({ page, count: stageCounts[index] })),
     sessions: furthestStageBySession.size,
     pageViews: visits.length,
@@ -169,11 +172,10 @@ async function viewReport(store, params, time, siteOrigin) {
   };
   if (['catalog', 'tracking', 'utmfy', 'sms', 'queue', 'security'].includes(section)) return { state };
 
-  const { leads, orders, ...overview } = reports(params, time, snapshot.orders);
-  const since = overview.daily[0].day;
-  const until = overview.daily.at(-1).day;
+  const { orders, ...overview } = reports(params, time, snapshot.orders);
+  const { since, until } = overview;
   if (section === 'leads') {
-    const records = await leadRecords(store, leads, orders, since, until, params);
+    const records = await leadRecords(store, orders, since, until);
     return { state, data: { ...filterRows(records.rows, params, leadFields), limited: records.limited } };
   }
   if (section === 'sales') return {
@@ -190,7 +192,7 @@ async function viewReport(store, params, time, siteOrigin) {
     }));
     return { state, data: overview, traffic, journey: { ...journey, recent } };
   }
-  if (['overview', 'pages'].includes(section)) {
+  if (['overview', 'pages', 'audience'].includes(section)) {
     return { state, data: overview, traffic: await trafficReport(store, since, until) };
   }
   return { state, data: overview };
@@ -210,7 +212,7 @@ function trackedLead(id, visits) {
   };
 }
 
-async function leadRecords(store, samples, orders, since, until, params) {
+async function leadRecords(store, orders, since, until) {
   const latestBySession = new Map();
   for (const order of orders) {
     const previous = latestBySession.get(order.sessionId);
@@ -220,9 +222,6 @@ async function leadRecords(store, samples, orders, since, until, params) {
     const latest = latestBySession.get(row.id);
     return { ...row, gateway: latest?.gateway || '', status: latest?.status || '' };
   };
-  const source = params.get('source');
-  if (source === 'sample') return { rows: samples.map(includeOrder), limited: false };
-
   const visits = await store.readTraffic(since, undefined, until);
   const bySession = new Map();
   for (const visit of visits) {
@@ -231,7 +230,6 @@ async function leadRecords(store, samples, orders, since, until, params) {
   }
   const rows = Array.from(bySession, ([id, pages]) => trackedLead(id, pages))
     .sort((first, next) => next.startedOn.localeCompare(first.startedOn) || first.id.localeCompare(next.id));
-  if (source !== 'tracked') rows.push(...samples);
   return { rows: rows.map(includeOrder), limited: visits.length >= 1000 };
 }
 
@@ -323,9 +321,7 @@ export function adminHandler({ auth, store, now = Date.now }) {
       }
       if (route === 'lead' && uuid.test(url.searchParams.get('id') || '')) {
         const id = url.searchParams.get('id').toLowerCase();
-        const { daily } = reports(url.searchParams, now());
-        const since = daily[0].day;
-        const until = daily.at(-1).day;
+        const { since, until } = reports(url.searchParams, now());
         const visits = await store.readTraffic(since, id, until);
         if (!visits.length) throw new HttpError(404, 'Sessão de teste indisponível no período.');
         const [snapshot, events] = await Promise.all([store.read(), store.readJourneyEvents(since, id, until)]);
@@ -340,35 +336,32 @@ export function adminHandler({ auth, store, now = Date.now }) {
       const orders = ['overview', 'sales', 'leads'].includes(route) ||
         (route === 'export' && url.searchParams.get('kind') !== 'audience') ? (await store.read()).orders : [];
       const data = reports(url.searchParams, now(), orders);
-      const since = data.daily[0].day;
-      const until = data.daily.at(-1).day;
+      const { since, until } = data;
       if (route === 'export' && url.searchParams.get('kind') === 'audience') {
-        const rows = Object.entries(data.audience).flatMap(([category, totals]) => totals.map(item => ({ category, ...item })));
-        return csvFile('publico-teste.csv', rows, [['Dimensão', 'category'], ['Segmento', 'name'], ['Sessões', 'count']]);
+        const traffic = await trafficReport(store, since, until);
+        const rows = traffic.sessionsByPage.filter(item => item.count).map(item => ({ ...item, name: journeyPages[item.page] }));
+        return csvFile('publico.csv', rows, [['Etapa', 'name'], ['Sessões registradas', 'count']]);
       }
       if (route === 'traffic') {
         return json(await trafficReport(store, since, until));
       }
       if (route === 'overview') {
-        const { leads, orders: transactions, ...overview } = data;
-        return json(overview);
+        const { orders: transactions, ...overview } = data;
+        return json({ ...overview, traffic: await trafficReport(store, since, until) });
       }
       if (route === 'leads') {
-        const records = await leadRecords(store, data.leads, data.orders, since, until, url.searchParams);
+        const records = await leadRecords(store, data.orders, since, until);
         return json({ ...filterRows(records.rows, url.searchParams, leadFields), limited: records.limited });
       }
       if (route === 'sales') return json(filterRows(data.orders, url.searchParams, saleFields));
       if (route === 'lead') {
-        const lead = data.leads.find(row => row.id === url.searchParams.get('id'));
-        if (!lead) throw new HttpError(404, 'Registro de teste indisponível no período.');
-        return json({ lead, orders: data.orders.filter(order => order.sessionId === lead.id) });
+        throw new HttpError(404, 'Sessão registrada indisponível no período.');
       }
       if (route === 'export') {
         const fields = salesExport
           ? [['ID','id'], ['Sessão','sessionId'], ['Gateway','gateway'], ['Status','status'], ['Centavos','total'], ['Data','createdAt']]
-          : [['Sessão','id'], ['Nome de teste','name'], ['Cidade','city'], ['Origem','origin'], ['Aparelho','device'],
-            ['Gateway','gateway'], ['Estado','status'], ['Data','createdAt']];
-        const records = salesExport ? data.orders : (await leadRecords(store, data.leads, data.orders, since, until, url.searchParams)).rows;
+          : [['Sessão','id'], ['Identificação','name'], ['Origem','origin'], ['Gateway','gateway'], ['Estado','status'], ['Data','createdAt']];
+        const records = salesExport ? data.orders : (await leadRecords(store, data.orders, since, until)).rows;
         const rows = matchingRows(records, url.searchParams, salesExport ? saleFields : leadFields);
         return csvFile(salesExport ? 'vendas-teste.csv' : 'leads-teste.csv', rows, fields);
       }

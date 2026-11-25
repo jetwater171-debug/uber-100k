@@ -73,11 +73,11 @@ export function supabaseStore({ url, secret, fetch }) {
       await request('on_conflict=session,page,day', {
         method: 'POST',
         headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
-        body: JSON.stringify(event),
+        body: JSON.stringify({ ...event, reporting_visible: true }),
       }, new URL('/rest/v1/campaign_demo_traffic', url));
     },
     async readTraffic(since, session, until) {
-      const filters = new URLSearchParams({ day: `gte.${since}`, select: 'page,session,day', order: 'day.desc', limit: 1000 });
+      const filters = new URLSearchParams({ day: `gte.${since}`, reporting_visible: 'is.true', select: 'page,session,day', order: 'day.desc', limit: 1000 });
       if (session) filters.set('session', `eq.${session}`);
       if (until) filters.append('day', `lte.${until}`);
       return request(filters, {},
@@ -87,12 +87,12 @@ export function supabaseStore({ url, secret, fetch }) {
       await request('on_conflict=session,page,event,day', {
         method: 'POST',
         headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
-        body: JSON.stringify(event),
+        body: JSON.stringify({ ...event, reporting_visible: true }),
       }, journey);
     },
     async readJourneyEvents(since, session, until) {
       const filters = new URLSearchParams({
-        day: `gte.${since}`, select: 'page,event,occurred_at', order: 'day.desc,occurred_at.desc', limit: 1000,
+        day: `gte.${since}`, reporting_visible: 'is.true', select: 'page,event,occurred_at', order: 'day.desc,occurred_at.desc', limit: 1000,
       });
       if (session) filters.set('session', `eq.${session}`);
       if (until) filters.append('day', `lte.${until}`);

@@ -20,7 +20,6 @@ export function leadDetails({ request, openOrder, escape, money, date, table, pe
 
   function render(data) {
     const { lead, orders } = data;
-    const tracked = lead.source === 'tracked';
     const ordered = orders.toSorted((first, next) => next.createdAt.localeCompare(first.createdAt));
     const latest = ordered[0];
     const journey = lead.visits
@@ -28,7 +27,7 @@ export function leadDetails({ request, openOrder, escape, money, date, table, pe
       : lead.steps;
     const activity = (lead.activity || []).map(row => `${when(row.at)} · ${row.title}`);
     title.textContent = lead.name;
-    subtitle.textContent = tracked ? 'Jornada acompanhada' : 'Perfil de exemplo';
+    subtitle.textContent = 'Jornada acompanhada';
     summary.innerHTML = fields([['Sessão', lead.id], ['Etapa mais avançada', lead.steps.at(-1)], ['Pedidos', orders.length],
       ['Status do pedido', latest?.status], ['Valor', latest ? money(latest.total) : '—']]);
     actions.innerHTML = `

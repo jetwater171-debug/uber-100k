@@ -1,4 +1,4 @@
-import { leadDetails } from './lead-details.js';
+import { leadDetails } from './lead-details.js?v=3';
 
 const navigation = document.querySelector('#navigation');
 const login = document.querySelector('#login');
@@ -23,7 +23,7 @@ const trackedLabels = {
 const moneyFormat = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const integer = new Intl.NumberFormat('pt-BR');
 const date = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-const contexts = { days: 7, from: '', to: '', q: '', page: 1, gateway: '', status: '', source: '' };
+const contexts = { days: 7, from: '', to: '', q: '', page: 1, gateway: '', status: '' };
 const dashboardControls = [
   ['compareGateways', 'Comparar gateways'],
   ['offerExtras', 'Exibir acessórios no catálogo de teste'],
@@ -170,22 +170,17 @@ function dashboard(data, traffic) {
       <button type="submit" class="button primary">Aplicar</button>
       <button type="button" class="button secondary" id="clear-dates">Limpar</button>
     </form>` +
-    '<div class="cards">' + [
-      ['Visitas de exemplo', integer.format(counts.visits)], ['Cadastros de exemplo', integer.format(counts.leads)],
-      ['Pedidos de teste', integer.format(counts.orders)], ['Pagos no teste', integer.format(counts.paid)],
-      ['Receita simulada', money(counts.revenue)],
-    ].map(([label, value]) => metric(label, value)).join('') + '</div>' +
-    '<div class="columns">' + panel('Funil da campanha', bars(data.funnel), 'Amostra') +
-    panel('Visitas por dia', bars(data.daily.slice(-7).map(item => ({ name: item.day.slice(5).split('-').reverse().join('/'), count: item.visits })))) +
-    '</div>' + '<div class="stack dashboard-controls">' + panel('Jornadas registradas neste painel',
+    '<div class="stack dashboard-controls">' + panel('Jornadas registradas neste painel',
       '<div class="cards">' + metric('Sessões acompanhadas', integer.format(traffic.sessions)) +
       metric('Visitas registradas', integer.format(traffic.pageViews)) +
       metric('Pedidos de jornada', integer.format(counts.testOrders)) +
       metric('Confirmados em teste', integer.format(counts.testPaid)) +
       metric('Valor confirmado em teste', money(counts.testRevenue)) + '</div>', traffic.limit ? 'Últimos 1.000 eventos' : '') +
-    panel('Visitas registradas por dia', bars(traffic.daily.map(({ day, count }) => ({
+    '<div class="columns">' + panel('Sessões por etapa', bars(traffic.sessionsByPage.map(row => ({
+      name: trackedLabels[row.page], count: row.count,
+    })))) + panel('Visitas registradas por dia', bars(traffic.daily.map(({ day, count }) => ({
       name: day.slice(5).split('-').reverse().join('/'), count,
-    })))) + panel('Controles da demonstração', '<form id="dashboard-settings">' +
+    })))) + '</div>' + panel('Controles da demonstração', '<form id="dashboard-settings">' +
       dashboardControls.map(([id, label]) => `<label class="control-row checkbox"><span>${label}</span>
         <input type="checkbox" data-dashboard-setting="${id}"${checked(pendingSettings[id] ?? state.settings[id])}></label>`).join('') + '</form>') + '</div>';
 }
@@ -200,9 +195,6 @@ function pagination(result) {
 function listView(kind, data) {
   const sales = kind === 'sales';
   const listTitle = sales ? 'Transações simuladas' : 'Sessões do protótipo';
-  const sourceFilter = `<label>Tipo <select name="source"><option value="">Todos</option>
-    <option value="tracked"${selected(contexts.source === 'tracked')}>Jornadas acompanhadas</option>
-    <option value="sample"${selected(contexts.source === 'sample')}>Amostras</option></select></label>`;
   const filters = `<label>Gateway <select name="gateway"><option value="">Todos</option>${state.settings.gateways.map(({ name }) =>
     `<option${selected(name === contexts.gateway)}>${escape(name)}</option>`).join('')}</select></label>
     <label>Estado <select name="status"><option value="">Todos</option>${orderStatuses.map(status =>
@@ -210,8 +202,8 @@ function listView(kind, data) {
   const columns = sales ? ['Pedido', 'Origem', 'Gateway', 'Valor', 'Estado', ''] :
     ['Sessão', 'Cidade', 'Origem', 'Etapa mais avançada', 'Gateway', 'Estado do pedido', ''];
   const rows = data.items.map(row => sales
-    ? [escape(row.id), row.items ? 'Jornada acompanhada' : 'Amostra', escape(row.gateway || '—'), money(row.total),
-      escape(row.status), row.items ? `<button type="button" class="button secondary" data-order="${escape(row.id)}">Ver pedido</button>` : '']
+    ? [escape(row.id), 'Jornada acompanhada', escape(row.gateway || '—'), money(row.total),
+      escape(row.status), `<button type="button" class="button secondary" data-order="${escape(row.id)}">Ver pedido</button>`]
     : [escape(row.name), escape(row.city || '—'), escape(row.origin), escape(row.steps.at(-1)), escape(row.gateway || '—'), escape(row.status || '—'),
       `<button type="button" class="button secondary" data-lead="${escape(row.id)}">Detalhes</button>`]);
   const summary = sales && data.audit ? panel('Auditoria de faturamento simulado', table(['Estado', 'Pedidos', 'Valor total'],
@@ -219,7 +211,7 @@ function listView(kind, data) {
   return title(sectionNames[kind], 'Consulte e exporte registros demonstrativos por período.') + range() + '</div><div class="stack">' +
     summary +
     panel(listTitle, `<form id="filters" class="controls">
-      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}${sourceFilter}
+      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}
       <button class="button primary" type="submit">Filtrar</button>
       <a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind }))}">Exportar CSV</a>
       </form>` + table(columns, rows, sales ? undefined : data.items) + pagination(data),
@@ -329,19 +321,21 @@ async function render() {
     const placeholderHistory = (state.audit || []).filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
     const renderers = {
       overview: () => dashboard(data, traffic),
-      pages: () => title('Páginas e funil', 'Compare as visitas da jornada acompanhada com o funil de exemplo.') + liveControls() + '</div><div class="columns">' +
+      pages: () => title('Páginas e funil', 'Compare visitas registradas e sessões únicas nas etapas acompanhadas.') + liveControls() + '</div><div class="columns">' +
         panel('Tracking da jornada de teste', '<p class="empty">Abra o site abaixo e percorra as etapas. A contagem acompanha esta jornada de teste.</p>' +
           '<a href="/?analytics=demo" target="_blank" rel="noopener" class="button primary">Abrir jornada com tracking</a> ' +
           '<button type="button" id="refresh-tracking" class="button secondary">Atualizar</button>' +
           bars(traffic.rows.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
           traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`) +
-        panel('Etapas percorridas', bars(data.funnel), 'Amostra') + '</div>',
+        panel('Sessões únicas por etapa', bars(traffic.sessionsByPage.map(row => ({ name: trackedLabels[row.page], count: row.count })))) + '</div>',
       leads: () => listView('leads', data),
       sales: () => listView('sales', data),
-      audience: () => title('Público', 'Agrupamentos das sessões de exemplo com vendas confirmadas em teste.') +
+      audience: () => title('Público', 'Distribuição das sessões registradas no período.') +
         `<div class="controls">${range()}<a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind: 'audience' }))}">Exportar público CSV</a></div></div><div class="columns">` +
-        panel('Cidades', bars(data.audience.city)) + panel('Origens', bars(data.audience.origin)) +
-        panel('Aparelhos', bars(data.audience.device)) + panel('Posicionamentos', bars(data.audience.placement || [])) + '</div>',
+        panel('Sessões por etapa', bars(traffic.sessionsByPage.filter(row => row.count).map(row =>
+          ({ name: trackedLabels[row.page], count: row.count })))) +
+        panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.filter(row => row.count).map(row =>
+          ({ name: trackedLabels[row.page], count: row.count })))) + '</div>',
       catalog: catalogView,
       gateways: () => gatewayView(data),
       tracking: () => title('Tracking', 'Configure a matriz de eventos para validar o fluxo em simulação.') + '</div><div class="columns">' + trackingCards(['Meta','TikTok']) + '</div>',
@@ -456,7 +450,7 @@ document.querySelector('#logout').addEventListener('click', async () => {
 
 window.addEventListener('hashchange', async () => {
   leadDialog.close();
-  Object.assign(contexts, { q: '', page: 1, gateway: '', status: '', source: '' });
+  Object.assign(contexts, { q: '', page: 1, gateway: '', status: '' });
   notice('');
   scheduleRefresh();
   await render();

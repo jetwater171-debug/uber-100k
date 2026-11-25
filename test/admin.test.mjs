@@ -338,19 +338,22 @@ test('a reminder batch validates pending orders, saves atomically and deduplicat
   assert.equal(repeated.state.queue.length, 2);
 });
 
-test('reports support search, period, pagination and CSV in the same environment', async () => {
+test('reports start empty and support search, period, pagination and CSV from recorded rows', async () => {
   const { request, login } = fixture();
   await login();
   const overview = await (await request('overview', { query: { days: '14' } })).json();
   assert.equal(overview.days, 14);
-  assert(overview.counts.revenue > 0);
-  const leads = await (await request('leads', { query: { q: 'Sao Paulo' } })).json();
-  assert(leads.total > 0);
-  assert(leads.items.every(lead => lead.city === 'São Paulo'));
+  assert.deepEqual(overview.counts, { testOrders: 0, testPaid: 0, testRevenue: 0 });
+  assert.equal(overview.traffic.sessions, 0);
+  assert.equal((await (await request('leads')).json()).total, 0);
+  await request('traffic', { body: { page: 'cadastro', session: sessionId } });
+  const leads = await (await request('leads', { query: { q: sessionId.slice(0, 8) } })).json();
+  assert.equal(leads.total, 1);
+  assert.equal(leads.items[0].id, sessionId);
   assert(leads.items.length <= leads.perPage);
   const data = await request('export', { query: { kind: 'sales' } });
   assert.match(data.headers.get('Content-Disposition'), /vendas-teste.csv/);
-  assert.match(await data.text(), /Pedido|PED-/);
+  assert.match(await data.text(), /Sessão/);
   assert.match(csv([{ field: '=1+1' }], [['Cabeçalho', 'field']]), /"'=1\+1"/);
 });
 
@@ -362,7 +365,7 @@ test('custom periods bound tracking, transactions and exports on both dates', as
   const today = { from: '2026-11-25', to: '2026-11-25' };
   const filtered = await (await request('view', { query: { section: 'overview', ...before } })).json();
   assert.equal(filtered.traffic.sessions, 0);
-  assert.equal(filtered.data.daily[0].day, '2026-11-24');
+  assert.equal(filtered.data.since, '2026-11-24');
   assert.equal((await (await request('traffic', { query: today })).json()).sessions, 1);
   assert.equal((await request('traffic', { query: { from: '2026-02-30', to: '2026-03-10' } })).status, 400);
   const csv = await (await request('export', { query: { kind: 'leads', source: 'tracked', ...before } })).text();
@@ -381,7 +384,7 @@ test('dashboard settings save together and reject unknown controls without writi
   assert.equal(data.state.settings.offerExtras, false);
 });
 
-test('sales audit and audience exports use the selected source without disclosing sample identities', async () => {
+test('sales audit and audience exports use recorded orders and aggregate session activity', async () => {
   const { request, login } = fixture();
   await login();
   const sale = await request('demo-order', { body: { items: ['camera'], session: sessionId, requestId: sessionId } });
@@ -391,10 +394,11 @@ test('sales audit and audience exports use the selected source without disclosin
   assert.deepEqual(list.data.audit.find(row => row.name === status.awaiting),
     { name: status.awaiting, orders: 1, cents: 3990 });
   const samples = await (await request('sales', { query: { source: 'sample' } })).json();
-  assert(samples.items.every(row => row.id.startsWith('PED-')));
+  assert.equal(samples.total, 0);
+  await request('traffic', { body: { page: 'cadastro', session: sessionId } });
   const csv = await (await request('export', { query: { kind: 'audience' } })).text();
-  assert.match(csv, /placement/);
-  assert.doesNotMatch(csv, /SIM-\d+|Motorista de teste/);
+  assert.match(csv, /Cadastro.*"1"/);
+  assert.doesNotMatch(csv, new RegExp(sessionId));
 });
 
 test('diagnoses supported integration scenarios and records simulated origin checks', async () => {
@@ -452,7 +456,7 @@ test('view requests return one consistent snapshot with section-specific records
   assert.equal(catalog.state.catalog.length, 6);
   assert.equal(catalog.data, undefined);
   const sales = await (await request('view', { query: { section: 'sales', page: '1' } })).json();
-  assert(sales.data.items.length > 0);
+  assert.equal(sales.data.items.length, 0);
   assert(sales.data.items.length <= sales.data.perPage);
   assert.equal(sales.state.orders, undefined);
   assert.equal((await request('view', { query: { section: 'outside' } })).status, 404);
@@ -474,6 +478,7 @@ test('Supabase store checks login limits and sends compare-and-swap and deduplic
   assert.equal(requests[0].url.searchParams.get('revision'), 'eq.0');
   assert.equal(requests[1].url.searchParams.get('on_conflict'), 'session,page,day');
   assert.equal(requests[1].options.headers.Prefer, 'resolution=ignore-duplicates,return=minimal');
+  assert.equal(JSON.parse(requests[1].options.body).reporting_visible, true);
   const bucket = 'a'.repeat(64);
   assert.equal(await store.allowLoginAttempt(bucket), true);
   assert.equal(requests[2].url.pathname, '/rest/v1/rpc/campaign_allow_admin_login');
@@ -481,4 +486,5 @@ test('Supabase store checks login limits and sends compare-and-swap and deduplic
   assert.deepEqual(JSON.parse(requests[2].options.body), { p_bucket: bucket });
   await store.readTraffic('2026-11-25', sessionId);
   assert.equal(requests[3].url.searchParams.get('session'), `eq.${sessionId}`);
+  assert.equal(requests[3].url.searchParams.get('reporting_visible'), 'is.true');
 });

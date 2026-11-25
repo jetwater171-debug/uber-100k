@@ -24,7 +24,7 @@ Referência auditada em `Desktop/sync/ifoodbag`, commit `188959e`. O inventário
 - Requisições públicas passam por validação de host, origem, sessão e lista de IPs. O sinal de cópia é armazenado em tabela própria. Um relato do navegador é um sinal de auditoria e pode ser falsificado.
 - O fluxo PIX distingue criação, consulta, webhook e reconciliação. A confirmação depende do provedor e deve ser idempotente. O ambiente financeiro da referência inclui etapas de cobrança apresentadas como IOF e Correios.
 - O remarketing filtra leads pendentes, revalida a venda e tem limites de lote, histórico e callbacks. Uma ação de envio pode ter efeitos externos e exige uma operação autorizada.
-- O banco da referência reúne dados pessoais e técnicos em leads, além de configurações, pageviews, fila e sinais de cópia. A nova estrutura usa dados de demonstração próprios e eventos de exemplo.
+- O banco da referência reúne dados pessoais e técnicos em leads, além de configurações, pageviews e fila. O protótipo da Uber adapta o vínculo por sessão, a deduplicação de páginas e eventos e o acesso restrito no Supabase. Os esquemas e registros pessoais da referência ficam no projeto original.
 
 ## Etapas do port
 
@@ -42,7 +42,7 @@ O painel demonstra a operação com exemplos, incluindo pagamentos, eventos de m
 | Visão geral | Atualização a cada 30 segundos, sessões, visitas e transações de teste, com controles de catálogo e gateways. |
 | Páginas | Visitas por etapa, conclusão do cadastro, seis perguntas, resultados da consulta de CEP, análise e seleção. |
 | Leads | Busca, período, tipo de sessão, exportação CSV, histórico por página e pedido vinculado. As sessões acompanhadas usam identificadores anônimos. |
-| Público | Agrupamentos de exemplo por origem, posicionamento, cidade e aparelho, com exportação agregada. |
+| Público | Sessões registradas por etapa e avanço observado, com exportação agregada. |
 | Vendas | Filtros, auditoria de valores por estado, exportação CSV, consulta e reconciliação de pedidos de teste. |
 | Gateways | Prioridade, ativação, diagnósticos simulados dos seis provedores, comparação e consulta por código de teste. |
 | Tracking | Matriz de eventos por integração, testes de Pixel e API, deduplicação e fila simulada. |
