@@ -17,8 +17,8 @@ export function memoryStore() {
       const key = [event.session, event.page, event.day].join('/');
       if (!traffic.has(key)) traffic.set(key, event);
     },
-    async readTraffic(since) {
-      return [...traffic.values()].filter(event => event.day >= since);
+    async readTraffic(since, session) {
+      return [...traffic.values()].filter(event => event.day >= since && (!session || event.session === session));
     },
   };
 }
@@ -66,8 +66,10 @@ export function supabaseStore({ url, secret, fetch }) {
         body: JSON.stringify(event),
       }, new URL('/rest/v1/campaign_demo_traffic', url));
     },
-    async readTraffic(since) {
-      return request(`day=gte.${since}&select=page,session,day&order=day.desc&limit=1000`, {},
+    async readTraffic(since, session) {
+      const filters = new URLSearchParams({ day: `gte.${since}`, select: 'page,session,day', order: 'day.desc', limit: 1000 });
+      if (session) filters.set('session', `eq.${session}`);
+      return request(filters, {},
         new URL('/rest/v1/campaign_demo_traffic', url));
     },
     async allowLoginAttempt(bucket) {

@@ -14,6 +14,8 @@ Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente
 
 **Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas por etapa** mostra a etapa mais avançada registrada para cada sessão no período selecionado.
 
+Em **Leads**, use o filtro **Jornadas acompanhadas** para consultar as sessões de teste anônimas. **Detalhes** mostra as páginas registradas por dia e os pedidos da sessão. A exportação CSV usa o mesmo filtro da lista.
+
 Os eventos configurados no painel entram na fila local durante a jornada acompanhada. `PageView` registra cada página uma vez por sessão e dia, `ViewContent` registra a abertura da oferta e `Lead` é enfileirado uma vez por sessão após o envio válido do formulário. A fila preserva os itens pendentes e mantém até 300 registros.
 
 ## Publicar o painel autenticado

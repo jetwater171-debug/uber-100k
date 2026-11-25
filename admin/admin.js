@@ -19,7 +19,7 @@ const trackedLabels = {
 const moneyFormat = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const integer = new Intl.NumberFormat('pt-BR');
 const date = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-const contexts = { days: 7, q: '', page: 1, gateway: '', status: '' };
+const contexts = { days: 7, q: '', page: 1, gateway: '', status: '', source: '' };
 let operator;
 let state;
 let sequence = 0;
@@ -134,23 +134,26 @@ function pagination(result) {
 
 function listView(kind, data) {
   const sales = kind === 'sales';
-  const listTitle = sales ? 'Transações simuladas' : 'Cadastros de teste';
+  const listTitle = sales ? 'Transações simuladas' : 'Sessões do protótipo';
+  const leadFilters = sales ? '' : `<label>Tipo <select name="source"><option value="">Todos</option>
+    <option value="tracked"${selected(contexts.source === 'tracked')}>Jornadas acompanhadas</option>
+    <option value="sample"${selected(contexts.source === 'sample')}>Amostras</option></select></label>`;
   const filters = sales ? `<label>Gateway <select name="gateway"><option value="">Todos</option>${state.settings.gateways.map(({ name }) =>
     `<option${selected(name === contexts.gateway)}>${escape(name)}</option>`).join('')}</select></label>
     <label>Estado <select name="status"><option value="">Todos</option>${orderStatuses.map(status =>
       `<option${selected(status === contexts.status)}>${status}</option>`).join('')}</select></label>` : '';
-  const columns = sales ? ['Pedido', 'Origem', 'Gateway', 'Valor', 'Estado', ''] : ['Cadastro', 'Cidade', 'Origem', 'Última etapa', ''];
+  const columns = sales ? ['Pedido', 'Origem', 'Gateway', 'Valor', 'Estado', ''] : ['Sessão', 'Cidade', 'Origem', 'Etapa mais avançada', ''];
   const rows = data.items.map(row => sales
     ? [escape(row.id), row.items ? 'Jornada acompanhada' : 'Amostra', escape(row.gateway || '—'), money(row.total),
       escape(row.status), row.items ? `<button type="button" class="button secondary" data-order="${escape(row.id)}">Ver pedido</button>` : '']
-    : [escape(row.name), escape(row.city), escape(row.origin), escape(row.steps.at(-1)),
+    : [escape(row.name), escape(row.city || '—'), escape(row.origin), escape(row.steps.at(-1)),
       `<button type="button" class="button secondary" data-lead="${escape(row.id)}">Detalhes</button>`]);
   return title(sectionNames[kind], 'Consulte e exporte registros demonstrativos por período.') + range() + '</div>' +
     panel(listTitle, `<form id="filters" class="controls">
-      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}
+      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}${leadFilters}
       <button class="button primary" type="submit">Filtrar</button>
       <a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind }))}">Exportar CSV</a>
-      </form>` + table(columns, rows) + pagination(data));
+      </form>` + table(columns, rows) + pagination(data), data.limited ? 'Últimos 1.000 eventos acompanhados' : '');
 }
 
 function gatewayView(data) {
@@ -325,7 +328,7 @@ document.querySelector('#logout').addEventListener('click', async () => {
 });
 
 window.addEventListener('hashchange', () => {
-  Object.assign(contexts, { q: '', page: 1, gateway: '', status: '' });
+  Object.assign(contexts, { q: '', page: 1, gateway: '', status: '', source: '' });
   notice('');
   render();
 });
@@ -383,9 +386,13 @@ view.addEventListener('click', async event => {
       const response = await fetch(`/api/admin?${params({ route: 'lead', id: button.dataset.lead })}`);
       if (!response.ok) throw new Error('Registro indisponível neste período.');
       const { lead, orders } = await response.json();
-      showDetails(lead.name, `<p>${escape(lead.city)} · ${escape(lead.origin)} · ${escape(lead.device)}</p>
-        <ol class="details-list">${lead.steps.map(step => `<li>${escape(step)}</li>`).join('')}</ol>` +
-        table(['Pedido', 'Gateway', 'Valor'], orders.map(order => [escape(order.id), escape(order.gateway), money(order.total)])));
+      const context = [lead.city, lead.origin, lead.device].filter(Boolean).map(escape).join(' · ');
+      const history = lead.visits
+        ? lead.visits.map(visit => `${visit.day.split('-').reverse().join('/')} · ${visit.title}`) : lead.steps;
+      showDetails(lead.name, `<p>${context}</p>
+        <ol class="details-list">${history.map(step => `<li>${escape(step)}</li>`).join('')}</ol>` +
+        table(['Pedido', 'Gateway', 'Valor', 'Estado'], orders.map(order =>
+          [escape(order.id), escape(order.gateway || '—'), money(order.total), escape(order.status)])));
     }
   } catch (error) { notice(error.message, true); }
 });

@@ -39,5 +39,5 @@ O painel demonstra a operação com exemplos, incluindo pagamentos, eventos de m
 
 - [Funções Node.js na Vercel](https://vercel.com/docs/functions/runtimes/node-js)
 - [Configuração do build e do diretório público](https://vercel.com/docs/builds/configure-a-build)
-- [Autenticação do Supabase](https://supabase.com/docs/reference/javascript/auth-signinwithpassword)
+- [Variáveis de ambiente da Vercel](https://vercel.com/docs/environment-variables/managing-environment-variables)
 - [Privilégios e RLS no Supabase](https://supabase.com/docs/guides/api/securing-your-api)

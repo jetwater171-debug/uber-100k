@@ -300,6 +300,29 @@ test('reports support search, period, pagination and CSV in the same environment
   assert.match(csv([{ field: '=1+1' }], [['Cabeçalho', 'field']]), /"'=1\+1"/);
 });
 
+test('tracked sessions can be filtered, exported and opened with their own orders', async () => {
+  const { request, login } = fixture();
+  await login();
+  for (const page of ['oferta', 'inicio', 'cadastro']) {
+    assert.equal((await request('traffic', { body: { page, session: sessionId } })).status, 204);
+  }
+  const created = await request('demo-order', { body: { items: ['camera'], session: sessionId, requestId: sessionId } });
+  assert.equal(created.status, 201);
+  const { id: orderId } = await created.json();
+  const list = await (await request('view', { query: { section: 'leads', source: 'tracked' } })).json();
+  assert.equal(list.data.total, 1);
+  assert.deepEqual(list.data.items[0].steps, ['Início', 'Sobre a oferta', 'Cadastro']);
+  assert.equal(list.data.items[0].visits, undefined);
+  const samples = await (await request('leads', { query: { source: 'sample', q: sessionId } })).json();
+  assert.equal(samples.total, 0);
+  const detail = await (await request('lead', { query: { id: sessionId } })).json();
+  assert.deepEqual(detail.lead.visits.map(visit => visit.title), ['Início', 'Sobre a oferta', 'Cadastro']);
+  assert.deepEqual(detail.orders.map(order => order.id), [orderId]);
+  const csvExport = await (await request('export', { query: { kind: 'leads', source: 'tracked' } })).text();
+  assert.match(csvExport, new RegExp(sessionId));
+  assert.doesNotMatch(csvExport, /Motorista de teste/);
+});
+
 test('view requests return one consistent snapshot with section-specific records', async () => {
   const { request, login } = fixture();
   await login();
@@ -338,4 +361,6 @@ test('Supabase store checks login limits and sends compare-and-swap and deduplic
   assert.equal(requests[2].url.pathname, '/rest/v1/rpc/campaign_allow_admin_login');
   assert.equal(requests[2].options.method, 'POST');
   assert.deepEqual(JSON.parse(requests[2].options.body), { p_bucket: bucket });
+  await store.readTraffic('2026-11-25', sessionId);
+  assert.equal(requests[3].url.searchParams.get('session'), `eq.${sessionId}`);
 });

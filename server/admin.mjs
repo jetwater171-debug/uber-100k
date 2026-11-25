@@ -91,6 +91,8 @@ function amend(state, command, at) {
 }
 
 const trackedPages = ['inicio', 'oferta', 'cadastro', 'questionario', 'regiao', 'analise'];
+const pageTitles = ['Início', 'Sobre a oferta', 'Cadastro', 'Questionário', 'Disponibilidade por região', 'Análise e ofertas'];
+const trackedPageTitles = new Map(trackedPages.map((page, index) => [page, pageTitles[index]]));
 const leadFields = ['id', 'name', 'city', 'origin', 'device'];
 const saleFields = ['id', 'sessionId', 'gateway'];
 const sections = ['overview', 'pages', 'leads', 'audience', 'sales', 'catalog', 'gateways',
@@ -131,12 +133,45 @@ async function viewReport(store, params, time) {
   if (['catalog', 'tracking', 'utmfy', 'sms', 'queue', 'security'].includes(section)) return { state };
 
   const { leads, orders, ...overview } = reports(params, time, snapshot.orders);
-  if (section === 'leads') return { state, data: filterRows(leads, params, leadFields) };
+  if (section === 'leads') {
+    const records = await leadRecords(store, leads, overview.daily[0].day, params);
+    return { state, data: { ...filterRows(records.rows, params, leadFields), limited: records.limited } };
+  }
   if (section === 'sales') return { state, data: filterRows(orders, params, saleFields) };
   if (['pages', 'navigation'].includes(section)) {
     return { state, data: overview, traffic: await trafficReport(store, overview.daily[0].day) };
   }
   return { state, data: overview };
+}
+
+function trackedLead(id, visits) {
+  const pages = new Set(visits.map(visit => visit.page));
+  const firstDay = visits.map(visit => visit.day).sort()[0];
+  return {
+    id,
+    name: `Sessão ${id.slice(0, 8)}`,
+    source: 'tracked',
+    origin: 'Jornada acompanhada',
+    startedOn: firstDay,
+    createdAt: `${firstDay}T00:00:00Z`,
+    steps: trackedPages.filter(page => pages.has(page)).map(page => trackedPageTitles.get(page)),
+  };
+}
+
+async function leadRecords(store, samples, since, params) {
+  const source = params.get('source');
+  if (source === 'sample') return { rows: samples, limited: false };
+
+  const visits = await store.readTraffic(since);
+  const bySession = new Map();
+  for (const visit of visits) {
+    if (!bySession.has(visit.session)) bySession.set(visit.session, []);
+    bySession.get(visit.session).push(visit);
+  }
+  const rows = Array.from(bySession, ([id, pages]) => trackedLead(id, pages))
+    .sort((first, next) => next.startedOn.localeCompare(first.startedOn) || first.id.localeCompare(next.id));
+  if (source !== 'tracked') rows.push(...samples);
+  return { rows, limited: visits.length >= 1000 };
 }
 
 async function saveOperation(store, state, result, operator, at) {
@@ -215,7 +250,19 @@ export function adminHandler({ auth, store, now = Date.now }) {
         if (!order) throw new HttpError(404, 'Pedido de teste indisponível.');
         return json({ order });
       }
-      const orders = ['overview', 'sales', 'export'].includes(route) ? (await store.read()).orders : [];
+      if (route === 'lead' && uuid.test(url.searchParams.get('id') || '')) {
+        const id = url.searchParams.get('id').toLowerCase();
+        const since = reports(url.searchParams, now()).daily[0].day;
+        const visits = await store.readTraffic(since, id);
+        if (!visits.length) throw new HttpError(404, 'Sessão de teste indisponível no período.');
+        const orders = (await store.read()).orders.filter(order => order.sessionId === id);
+        const history = visits.toSorted((first, next) => first.day.localeCompare(next.day) ||
+          trackedPages.indexOf(first.page) - trackedPages.indexOf(next.page))
+          .map(({ page, day }) => ({ title: trackedPageTitles.get(page), day }));
+        return json({ lead: { ...trackedLead(id, visits), visits: history }, orders });
+      }
+      const salesExport = route === 'export' && url.searchParams.get('kind') === 'sales';
+      const orders = ['overview', 'sales'].includes(route) || salesExport ? (await store.read()).orders : [];
       const data = reports(url.searchParams, now(), orders);
       if (route === 'traffic') {
         return json(await trafficReport(store, data.daily[0].day));
@@ -224,7 +271,10 @@ export function adminHandler({ auth, store, now = Date.now }) {
         const { leads, orders: transactions, ...overview } = data;
         return json(overview);
       }
-      if (route === 'leads') return json(filterRows(data.leads, url.searchParams, leadFields));
+      if (route === 'leads') {
+        const records = await leadRecords(store, data.leads, data.daily[0].day, url.searchParams);
+        return json({ ...filterRows(records.rows, url.searchParams, leadFields), limited: records.limited });
+      }
       if (route === 'sales') return json(filterRows(data.orders, url.searchParams, saleFields));
       if (route === 'lead') {
         const lead = data.leads.find(row => row.id === url.searchParams.get('id'));
@@ -232,15 +282,15 @@ export function adminHandler({ auth, store, now = Date.now }) {
         return json({ lead, orders: data.orders.filter(order => order.sessionId === lead.id) });
       }
       if (route === 'export') {
-        const sales = url.searchParams.get('kind') === 'sales';
-        const fields = sales
+        const fields = salesExport
           ? [['ID','id'], ['Sessão','sessionId'], ['Gateway','gateway'], ['Status','status'], ['Centavos','total'], ['Data','createdAt']]
           : [['Sessão','id'], ['Nome de teste','name'], ['Cidade','city'], ['Origem','origin'], ['Aparelho','device'], ['Data','createdAt']];
-        const rows = matchingRows(sales ? data.orders : data.leads, url.searchParams, sales ? saleFields : leadFields);
+        const records = salesExport ? data.orders : (await leadRecords(store, data.leads, data.daily[0].day, url.searchParams)).rows;
+        const rows = matchingRows(records, url.searchParams, salesExport ? saleFields : leadFields);
         return new Response(csv(rows, fields), {
           headers: {
             'Content-Type': 'text/csv; charset=utf-8',
-            'Content-Disposition': `attachment; filename="${sales ? 'vendas' : 'leads'}-teste.csv"`,
+            'Content-Disposition': `attachment; filename="${salesExport ? 'vendas' : 'leads'}-teste.csv"`,
             'Cache-Control': 'no-store',
           },
         });
