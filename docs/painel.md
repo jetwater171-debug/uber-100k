@@ -20,7 +20,9 @@ Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente
 
 Use **Atualização automática** na Visão geral ou em Páginas e funil para atualizar os relatórios a cada 30 segundos enquanto a aba estiver ativa.
 
-Em **Leads**, use o filtro **Jornadas acompanhadas** para consultar as sessões de teste anônimas. **Detalhes** mostra as páginas registradas por dia e os pedidos da sessão. A exportação CSV usa o mesmo filtro da lista.
+Em **Leads**, filtre as sessões por origem, gateway ou estado do pedido. Clique na linha ou em **Detalhes** para abrir o overlay com resumo da sessão, páginas visitadas, eventos e pedidos. A consulta abre o estado atual do PIX de teste. O link copiado exige login no painel e o JSON contém os dados disponíveis nessa sessão de teste. A exportação CSV usa os filtros da lista.
+
+Na **Visão geral**, escolha um período padrão ou aplique um intervalo de até 90 dias. As opções de catálogo e comparação de gateways ficam pendentes até você clicar em **Salvar configurações**.
 
 Os eventos configurados no painel entram na fila local durante a jornada acompanhada. `PageView` registra cada página uma vez por sessão e dia, `ViewContent` registra a abertura da oferta e `Lead` é enfileirado uma vez por sessão após o envio válido do formulário. A fila preserva os itens pendentes e mantém até 300 registros.
 

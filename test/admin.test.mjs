@@ -354,6 +354,33 @@ test('reports support search, period, pagination and CSV in the same environment
   assert.match(csv([{ field: '=1+1' }], [['Cabeçalho', 'field']]), /"'=1\+1"/);
 });
 
+test('custom periods bound tracking, transactions and exports on both dates', async () => {
+  const { request, login } = fixture();
+  await login();
+  await request('traffic', { body: { session: sessionId, page: 'inicio' } });
+  const before = { from: '2026-11-24', to: '2026-11-24' };
+  const today = { from: '2026-11-25', to: '2026-11-25' };
+  const filtered = await (await request('view', { query: { section: 'overview', ...before } })).json();
+  assert.equal(filtered.traffic.sessions, 0);
+  assert.equal(filtered.data.daily[0].day, '2026-11-24');
+  assert.equal((await (await request('traffic', { query: today })).json()).sessions, 1);
+  assert.equal((await request('traffic', { query: { from: '2026-02-30', to: '2026-03-10' } })).status, 400);
+  const csv = await (await request('export', { query: { kind: 'leads', source: 'tracked', ...before } })).text();
+  assert.doesNotMatch(csv, new RegExp(sessionId));
+});
+
+test('dashboard settings save together and reject unknown controls without writing', async () => {
+  const { request, login } = fixture();
+  await login();
+  assert.equal((await request('command', { body: { type: 'features', version: 0, value: { offerExtras: false, openRoutes: true } } })).status, 400);
+  const saved = await request('command', { body: { type: 'features', version: 0, value: { compareGateways: false, offerExtras: false } } });
+  assert.equal(saved.status, 200);
+  const data = await saved.json();
+  assert.equal(data.state.version, 1);
+  assert.equal(data.state.settings.compareGateways, false);
+  assert.equal(data.state.settings.offerExtras, false);
+});
+
 test('sales audit and audience exports use the selected source without disclosing sample identities', async () => {
   const { request, login } = fixture();
   await login();
@@ -399,6 +426,9 @@ test('tracked sessions can be filtered, exported and opened with their own order
   const list = await (await request('view', { query: { section: 'leads', source: 'tracked' } })).json();
   assert.equal(list.data.total, 1);
   assert.deepEqual(list.data.items[0].steps, ['Início', 'Sobre a oferta', 'Cadastro']);
+  assert.equal(list.data.items[0].status, status.awaiting);
+  const otherStatus = await (await request('leads', { query: { source: 'tracked', status: status.paid } })).json();
+  assert.equal(otherStatus.total, 0);
   assert.equal(list.data.items[0].visits, undefined);
   const samples = await (await request('leads', { query: { source: 'sample', q: sessionId } })).json();
   assert.equal(samples.total, 0);
@@ -407,6 +437,7 @@ test('tracked sessions can be filtered, exported and opened with their own order
   assert.deepEqual(detail.orders.map(order => order.id), [orderId]);
   const csvExport = await (await request('export', { query: { kind: 'leads', source: 'tracked' } })).text();
   assert.match(csvExport, new RegExp(sessionId));
+  assert.match(csvExport, /Aguardando PIX de teste/);
   assert.doesNotMatch(csvExport, /Motorista de teste/);
 });
 

@@ -1,5 +1,6 @@
 import { demoData, gateways, stages } from './fixtures.mjs';
 import { status } from './operations.mjs';
+import { HttpError } from './errors.mjs';
 
 function counts(rows, field) {
   const totals = new Map();
@@ -11,14 +12,36 @@ function normalized(text) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
 
+const dayMs = 86400000;
+function utcDay(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value || '')) return NaN;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? time : NaN;
+}
+
+export function reportPeriod(params, now) {
+  if (params.get('from') || params.get('to')) {
+    const start = utcDay(params.get('from'));
+    const end = utcDay(params.get('to'));
+    const days = (end - start) / dayMs + 1;
+    if (!Number.isInteger(days) || days < 1 || days > 90) throw new HttpError(400, 'Informe um intervalo de até 90 dias.');
+    return { days, start, cutoff: start - 1, end: end + dayMs };
+  }
+  const days = [7, 14, 30].includes(Number(params.get('days'))) ? Number(params.get('days')) : 7;
+  return { days, start: Math.floor(now / dayMs) * dayMs - (days - 1) * dayMs, cutoff: now - days * dayMs, end: Infinity };
+}
+
 export function reports(params, now = Date.now(), journeyOrders = []) {
   const { sessions, orders } = demoData(now);
-  const days = [7, 14, 30].includes(Number(params.get('days'))) ? Number(params.get('days')) : 7;
-  const cutoff = now - days * 86400000;
-  const visits = sessions.filter(row => Date.parse(row.createdAt) > cutoff);
-  const transactions = orders.filter(row => Date.parse(row.createdAt) > cutoff);
+  const { days, start, cutoff, end } = reportPeriod(params, now);
+  const inPeriod = row => {
+    const at = Date.parse(row.createdAt);
+    return at > cutoff && at < end;
+  };
+  const visits = sessions.filter(inPeriod);
+  const transactions = orders.filter(inPeriod);
   const paid = transactions.filter(order => order.status === status.paid);
-  const realTests = journeyOrders.filter(order => Date.parse(order.createdAt) > cutoff);
+  const realTests = journeyOrders.filter(inPeriod);
   const journeyPaid = realTests.filter(order => order.status === status.paid);
   const paidSessions = new Set(paid.map(order => order.sessionId));
   const paidAudience = visits.filter(session => paidSessions.has(session.id));
@@ -28,7 +51,7 @@ export function reports(params, now = Date.now(), journeyOrders = []) {
     departures: step.count - (steps[index + 1]?.count ?? step.count),
   }));
   const daily = Array.from({ length: days }, (_, index) => ({
-    day: new Date(now - (days - index - 1) * 86400000).toISOString().slice(0, 10),
+    day: new Date(start + index * dayMs).toISOString().slice(0, 10),
     visits: 0,
     sales: 0,
   }));

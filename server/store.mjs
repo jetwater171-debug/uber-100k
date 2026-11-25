@@ -18,15 +18,15 @@ export function memoryStore() {
       const key = [event.session, event.page, event.day].join('/');
       if (!traffic.has(key)) traffic.set(key, event);
     },
-    async readTraffic(since, session) {
-      return [...traffic.values()].filter(event => event.day >= since && (!session || event.session === session));
+    async readTraffic(since, session, until) {
+      return [...traffic.values()].filter(event => event.day >= since && (!until || event.day <= until) && (!session || event.session === session));
     },
     async recordJourneyEvent(event) {
       const key = [event.session, event.page, event.event, event.day].join('/');
       if (!journey.has(key)) journey.set(key, event);
     },
-    async readJourneyEvents(since, session) {
-      return [...journey.values()].filter(event => event.day >= since && (!session || event.session === session))
+    async readJourneyEvents(since, session, until) {
+      return [...journey.values()].filter(event => event.day >= since && (!until || event.day <= until) && (!session || event.session === session))
         .sort((first, next) => next.occurred_at.localeCompare(first.occurred_at)).slice(0, 1000);
     },
   };
@@ -76,9 +76,10 @@ export function supabaseStore({ url, secret, fetch }) {
         body: JSON.stringify(event),
       }, new URL('/rest/v1/campaign_demo_traffic', url));
     },
-    async readTraffic(since, session) {
+    async readTraffic(since, session, until) {
       const filters = new URLSearchParams({ day: `gte.${since}`, select: 'page,session,day', order: 'day.desc', limit: 1000 });
       if (session) filters.set('session', `eq.${session}`);
+      if (until) filters.append('day', `lte.${until}`);
       return request(filters, {},
         new URL('/rest/v1/campaign_demo_traffic', url));
     },
@@ -89,11 +90,12 @@ export function supabaseStore({ url, secret, fetch }) {
         body: JSON.stringify(event),
       }, journey);
     },
-    async readJourneyEvents(since, session) {
+    async readJourneyEvents(since, session, until) {
       const filters = new URLSearchParams({
         day: `gte.${since}`, select: 'page,event,occurred_at', order: 'day.desc,occurred_at.desc', limit: 1000,
       });
       if (session) filters.set('session', `eq.${session}`);
+      if (until) filters.append('day', `lte.${until}`);
       return request(filters, {}, journey);
     },
     async allowLoginAttempt(bucket) {

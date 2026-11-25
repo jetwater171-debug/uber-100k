@@ -1,13 +1,17 @@
+import { leadDetails } from './lead-details.js';
+
 const navigation = document.querySelector('#navigation');
 const login = document.querySelector('#login');
 const loginForm = document.querySelector('#login-form');
 const feedback = document.querySelector('#feedback');
 const view = document.querySelector('#view');
 const details = document.querySelector('#details');
+const saveSettings = document.querySelector('#save-settings');
 const groups = [
-  ['Operação', ['overview', 'Visão geral'], ['pages', 'Páginas e funil'], ['leads', 'Leads'], ['audience', 'Público'], ['sales', 'Vendas'], ['catalog', 'Catálogo']],
-  ['Integrações', ['gateways', 'Gateways PIX'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy e Pushcut'], ['sms', 'SMS e remarketing'], ['queue', 'Fila de testes']],
-  ['Diagnóstico', ['activity', 'Eventos da jornada'], ['navigation', 'Saídas e retornos'], ['domains', 'Domínios'], ['security', 'Auditoria e segurança']],
+  ['', ['overview', 'Visão geral'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy e Pushcut'], ['sms', 'SMS e remarketing'],
+    ['gateways', 'Gateways PIX'], ['pages', 'Páginas e funil'], ['audience', 'Público'], ['sales', 'Vendas'],
+    ['navigation', 'Saídas e retornos'], ['leads', 'Leads'], ['domains', 'Domínios']],
+  ['Operação de teste', ['catalog', 'Catálogo'], ['queue', 'Fila de testes'], ['activity', 'Eventos da jornada'], ['security', 'Auditoria e segurança']],
 ];
 const sectionNames = Object.fromEntries(groups.flatMap(([, ...links]) => links));
 const eventTypes = ['PageView', 'ViewContent', 'Lead', 'InitiateCheckout', 'Purchase'];
@@ -19,7 +23,12 @@ const trackedLabels = {
 const moneyFormat = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const integer = new Intl.NumberFormat('pt-BR');
 const date = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-const contexts = { days: 7, q: '', page: 1, gateway: '', status: '', source: '' };
+const contexts = { days: 7, from: '', to: '', q: '', page: 1, gateway: '', status: '', source: '' };
+const dashboardControls = [
+  ['compareGateways', 'Comparar gateways'],
+  ['offerExtras', 'Exibir acessórios no catálogo de teste'],
+];
+const pendingSettings = {};
 let operator;
 let state;
 let sequence = 0;
@@ -36,7 +45,10 @@ function escape(value) {
 const money = cents => moneyFormat.format(cents / 100);
 const checked = value => value ? ' checked' : '';
 const selected = value => value ? ' selected' : '';
-const section = () => Object.hasOwn(sectionNames, location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
+const section = () => {
+  const name = location.hash.slice(1).split('/')[0];
+  return Object.hasOwn(sectionNames, name) ? name : 'overview';
+};
 const params = (fields = {}) => new URLSearchParams({ ...contexts, ...fields });
 
 async function api(route, options, filters = {}) {
@@ -49,6 +61,19 @@ async function api(route, options, filters = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'O painel ficou indisponível.');
   return data;
+}
+
+const leadDialog = leadDetails({ request: (route, query) => api(route, undefined, query), openOrder: showOrder,
+  escape, money, date, table, period: () => ({ days: contexts.days, from: contexts.from, to: contexts.to }) });
+
+function openLinkedLead() {
+  const match = location.hash.match(/^#leads\/([A-Za-z\d-]{1,100})$/u);
+  if (operator && match) void leadDialog.open(match[1]);
+}
+
+function updateSettingsButton() {
+  saveSettings.hidden = !operator || section() !== 'overview';
+  saveSettings.disabled = !Object.keys(pendingSettings).length || updatesInFlight > 0;
 }
 
 function notice(message, error = false) {
@@ -64,12 +89,17 @@ function account(user) {
   navigation.hidden = !user;
   document.querySelector('#operator').hidden = !user;
   document.querySelector('#operator-name').textContent = user?.name || '';
-  if (!user) view.replaceChildren();
+  if (!user) {
+    view.replaceChildren();
+    leadDialog.close();
+    for (const key of Object.keys(pendingSettings)) delete pendingSettings[key];
+  }
+  updateSettingsButton();
   scheduleRefresh();
 }
 
 function nav(active) {
-  navigation.innerHTML = groups.map(([group, ...links]) => '<p class="nav-label">' + group + '</p>' +
+  navigation.innerHTML = groups.map(([group, ...links]) => (group ? '<p class="nav-label">' + group + '</p>' : '') +
     links.map(([id, label]) => `<a href="#${id}"${id === active ? ' aria-current="page"' : ''}>${label}</a>`).join('')).join('');
 }
 
@@ -102,10 +132,11 @@ function panel(name, body, badge = '') {
   return `<section class="panel"><div class="panel-head"><h2>${escape(name)}</h2>${badge ? `<span class="badge">${escape(badge)}</span>` : ''}</div>${body}</section>`;
 }
 
-function table(headers, rows) {
+function table(headers, rows, leads) {
   if (!rows.length) return '<p class="empty">Nenhum registro para estes filtros.</p>';
-  return '<div class="scroller"><table><thead><tr>' + headers.map(header => `<th scope="col">${escape(header)}</th>`).join('') +
-    '</tr></thead><tbody>' + rows.map(row => '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') +
+  return `<div class="scroller${leads ? ' lead-table' : ''}"><table><thead><tr>` +
+    headers.map(header => `<th scope="col">${escape(header)}</th>`).join('') +
+    '</tr></thead><tbody>' + rows.map((row, index) => `<tr${leads ? ` data-lead-row="${escape(leads[index].id)}"` : ''}>` + row.map(cell => `<td>${cell}</td>`).join('') +
       '</tr>').join('') + '</tbody></table></div>';
 }
 
@@ -128,6 +159,17 @@ function auditTable(records) {
 function dashboard(data, traffic) {
   const { counts } = data;
   return title('Visão geral', 'Acompanhe o funil e as vendas de teste da campanha.') + liveControls() + '</div>' +
+    `<section class="panel live-panel"><div><h2>Monitoramento ao vivo</h2>
+      <p class="muted">Acompanhe as sessões e os pedidos registrados nas jornadas de teste.</p>
+      <div class="controls"><span class="badge">${integer.format(traffic.pageViews)} ${traffic.pageViews === 1 ? 'visita registrada' : 'visitas registradas'}</span>
+      <span class="badge">Gateway prioritário · ${escape(state.settings.gateways.find(item => item.enabled)?.name || 'Nenhum ativo')}</span></div></div>
+      <div class="live-score"><span>Sessões acompanhadas</span><strong>${integer.format(traffic.sessions)}</strong></div></section>` +
+    `<form id="date-filter" class="controls">
+      <label>De <input type="date" name="from" value="${escape(contexts.from)}"></label>
+      <label>Até <input type="date" name="to" value="${escape(contexts.to)}"></label>
+      <button type="submit" class="button primary">Aplicar</button>
+      <button type="button" class="button secondary" id="clear-dates">Limpar</button>
+    </form>` +
     '<div class="cards">' + [
       ['Visitas de exemplo', integer.format(counts.visits)], ['Cadastros de exemplo', integer.format(counts.leads)],
       ['Pedidos de teste', integer.format(counts.orders)], ['Pagos no teste', integer.format(counts.paid)],
@@ -143,10 +185,9 @@ function dashboard(data, traffic) {
       metric('Valor confirmado em teste', money(counts.testRevenue)) + '</div>', traffic.limit ? 'Últimos 1.000 eventos' : '') +
     panel('Visitas registradas por dia', bars(traffic.daily.map(({ day, count }) => ({
       name: day.slice(5).split('-').reverse().join('/'), count,
-    })))) + panel('Controles da demonstração', [
-      ['compareGateways', 'Comparar gateways'], ['offerExtras', 'Exibir acessórios no catálogo de teste'],
-    ].map(([id, label]) => `<label class="control-row checkbox"><span>${label}</span>
-      <input type="checkbox" data-change="feature" data-key="${id}"${checked(state.settings[id])}></label>`).join('')) + '</div>';
+    })))) + panel('Controles da demonstração', '<form id="dashboard-settings">' +
+      dashboardControls.map(([id, label]) => `<label class="control-row checkbox"><span>${label}</span>
+        <input type="checkbox" data-dashboard-setting="${id}"${checked(pendingSettings[id] ?? state.settings[id])}></label>`).join('') + '</form>') + '</div>';
 }
 
 function pagination(result) {
@@ -162,15 +203,16 @@ function listView(kind, data) {
   const sourceFilter = `<label>Tipo <select name="source"><option value="">Todos</option>
     <option value="tracked"${selected(contexts.source === 'tracked')}>Jornadas acompanhadas</option>
     <option value="sample"${selected(contexts.source === 'sample')}>Amostras</option></select></label>`;
-  const filters = sales ? `<label>Gateway <select name="gateway"><option value="">Todos</option>${state.settings.gateways.map(({ name }) =>
+  const filters = `<label>Gateway <select name="gateway"><option value="">Todos</option>${state.settings.gateways.map(({ name }) =>
     `<option${selected(name === contexts.gateway)}>${escape(name)}</option>`).join('')}</select></label>
     <label>Estado <select name="status"><option value="">Todos</option>${orderStatuses.map(status =>
-      `<option${selected(status === contexts.status)}>${status}</option>`).join('')}</select></label>` : '';
-  const columns = sales ? ['Pedido', 'Origem', 'Gateway', 'Valor', 'Estado', ''] : ['Sessão', 'Cidade', 'Origem', 'Etapa mais avançada', ''];
+      `<option${selected(status === contexts.status)}>${status}</option>`).join('')}</select></label>`;
+  const columns = sales ? ['Pedido', 'Origem', 'Gateway', 'Valor', 'Estado', ''] :
+    ['Sessão', 'Cidade', 'Origem', 'Etapa mais avançada', 'Gateway', 'Estado do pedido', ''];
   const rows = data.items.map(row => sales
     ? [escape(row.id), row.items ? 'Jornada acompanhada' : 'Amostra', escape(row.gateway || '—'), money(row.total),
       escape(row.status), row.items ? `<button type="button" class="button secondary" data-order="${escape(row.id)}">Ver pedido</button>` : '']
-    : [escape(row.name), escape(row.city || '—'), escape(row.origin), escape(row.steps.at(-1)),
+    : [escape(row.name), escape(row.city || '—'), escape(row.origin), escape(row.steps.at(-1)), escape(row.gateway || '—'), escape(row.status || '—'),
       `<button type="button" class="button secondary" data-lead="${escape(row.id)}">Detalhes</button>`]);
   const summary = sales && data.audit ? panel('Auditoria de faturamento simulado', table(['Estado', 'Pedidos', 'Valor total'],
     data.audit.map(row => [escape(row.name), integer.format(row.orders), money(row.cents)]))) : '';
@@ -180,7 +222,8 @@ function listView(kind, data) {
       <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}${sourceFilter}
       <button class="button primary" type="submit">Filtrar</button>
       <a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind }))}">Exportar CSV</a>
-      </form>` + table(columns, rows) + pagination(data), data.limited ? 'Últimos 1.000 eventos acompanhados' : '') + '</div>';
+      </form>` + table(columns, rows, sales ? undefined : data.items) + pagination(data),
+      data.limited ? 'Últimos 1.000 eventos acompanhados' : '') + '</div>';
 }
 
 function gatewayView(data) {
@@ -275,12 +318,14 @@ async function render() {
   const current = ++sequence;
   const active = section();
   nav(active);
+  updateSettingsButton();
   view.setAttribute('aria-busy', 'true');
   try {
     const response = await api('view', undefined, { section: active });
     if (current !== sequence || !operator) return;
     const { data, traffic, journey, domains } = response;
     state = response.state;
+    updateSettingsButton();
     const placeholderHistory = (state.audit || []).filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
     const renderers = {
       overview: () => dashboard(data, traffic),
@@ -352,16 +397,17 @@ async function showOrder(id) {
   const response = await fetch(`/api/admin?${params({ route: 'order', id })}`);
   if (!response.ok) throw new Error('Pedido de teste indisponível.');
   const { order } = await response.json();
+  const orderId = order.id;
   const enabled = state.settings.gateways.filter(entry => entry.enabled);
   let actions = '';
   if (order.status === orderStatuses[0]) {
     actions = `<div class="controls"><label>Gateway <select id="order-gateway"><option value="">Usar prioridade configurada</option>${enabled.map(entry =>
       `<option>${escape(entry.name)}</option>`).join('')}</select></label>
-      <button type="button" class="button primary" data-order-action="order-payment" data-id="${escape(id)}"${enabled.length ? '' : ' disabled'}>Gerar PIX de teste</button></div>`;
+      <button type="button" class="button primary" data-order-action="order-payment" data-id="${escape(orderId)}"${enabled.length ? '' : ' disabled'}>Gerar PIX de teste</button></div>`;
   } else if (order.status === orderStatuses[1]) {
     actions = `<div class="controls">
-      <button type="button" class="button primary" data-order-action="order-reconcile" data-outcome="confirm" data-id="${escape(id)}">Simular confirmação</button>
-      <button type="button" class="button secondary" data-order-action="order-reconcile" data-outcome="cancel" data-id="${escape(id)}">Simular cancelamento</button></div>`;
+      <button type="button" class="button primary" data-order-action="order-reconcile" data-outcome="confirm" data-id="${escape(orderId)}">Simular confirmação</button>
+      <button type="button" class="button secondary" data-order-action="order-reconcile" data-outcome="cancel" data-id="${escape(orderId)}">Simular cancelamento</button></div>`;
   }
   showDetails('Pedido de teste', `<p class="empty">${escape(order.id)}</p>
     ${table(['Produto', 'Preço registrado'], order.items.map(item => [escape(item.name), money(item.cents)]))}
@@ -400,6 +446,7 @@ loginForm.addEventListener('submit', async event => {
     notice('');
     account(data.operator);
     await render();
+    openLinkedLead();
   } catch (error) { notice(error.message, true); } finally { submit.disabled = false; }
 });
 
@@ -407,11 +454,13 @@ document.querySelector('#logout').addEventListener('click', async () => {
   try { await api('logout', {}); account(null); notice(''); } catch (error) { notice(error.message, true); }
 });
 
-window.addEventListener('hashchange', () => {
+window.addEventListener('hashchange', async () => {
+  leadDialog.close();
   Object.assign(contexts, { q: '', page: 1, gateway: '', status: '', source: '' });
   notice('');
   scheduleRefresh();
-  render();
+  await render();
+  openLinkedLead();
 });
 document.addEventListener('visibilitychange', scheduleRefresh);
 
@@ -419,6 +468,26 @@ view.addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.target;
   const entries = Object.fromEntries(new FormData(form));
+  if (form.id === 'date-filter') {
+    if (!entries.from || !entries.to || entries.from > entries.to || Date.parse(entries.to) - Date.parse(entries.from) > 89 * 86400000) {
+      notice('Informe um intervalo de até 90 dias.', true);
+      return;
+    }
+    Object.assign(contexts, { from: entries.from, to: entries.to, page: 1 });
+    notice('');
+    await render();
+    return;
+  }
+  if (form.id === 'dashboard-settings') {
+    if (!Object.keys(pendingSettings).length) return;
+    saveSettings.disabled = true;
+    try {
+      await command('features', null, { ...pendingSettings });
+      for (const key of Object.keys(pendingSettings)) delete pendingSettings[key];
+    } catch (error) { notice(error.message, true); await render(); }
+    finally { updateSettingsButton(); }
+    return;
+  }
   if (form.id === 'filters') {
     Object.assign(contexts, entries, { page: 1 });
     await render();
@@ -455,8 +524,17 @@ view.addEventListener('change', async event => {
   const { target } = event;
   if (target.id === 'period') {
     contexts.days = Number(target.value);
+    contexts.from = '';
+    contexts.to = '';
     contexts.page = 1;
     await render();
+    return;
+  }
+  if (target.dataset.dashboardSetting) {
+    const key = target.dataset.dashboardSetting;
+    if (target.checked === state.settings[key]) delete pendingSettings[key];
+    else pendingSettings[key] = target.checked;
+    updateSettingsButton();
     return;
   }
   try {
@@ -471,8 +549,15 @@ view.addEventListener('change', async event => {
 
 view.addEventListener('click', async event => {
   const button = event.target.closest('button');
+  const leadRow = event.target.closest('[data-lead-row]');
+  if (leadRow && (!button || button.dataset.lead)) { await leadDialog.open(leadRow.dataset.leadRow); return; }
   if (!button) return;
   try {
+    if (button.id === 'clear-dates') {
+      Object.assign(contexts, { from: '', to: '', page: 1 });
+      notice('');
+      await render();
+    }
     if (button.id === 'live-refresh') {
       liveRefresh = !liveRefresh;
       button.setAttribute('aria-pressed', String(liveRefresh));
@@ -493,25 +578,13 @@ view.addEventListener('click', async event => {
       showDetails('PIX de teste', `<p class="muted">Identificador de simulação para ${escape(result.detail)}.</p>
         <p class="empty">${escape(result.code)}</p><p>Este teste não gera cobrança.</p>`);
     }
-    if (button.dataset.lead) {
-      const response = await fetch(`/api/admin?${params({ route: 'lead', id: button.dataset.lead })}`);
-      if (!response.ok) throw new Error('Registro indisponível neste período.');
-      const { lead, orders } = await response.json();
-      const context = [lead.city, lead.origin, lead.device].filter(Boolean).map(escape).join(' · ');
-      const history = lead.visits
-        ? lead.visits.map(visit => `${visit.day.split('-').reverse().join('/')} · ${visit.title}`) : lead.steps;
-      const activity = lead.activity?.length
-        ? panel('Eventos registrados', table(['Quando', 'Evento'], lead.activity.map(row =>
-          [date.format(new Date(row.at)), escape(row.title)]))) : '';
-      showDetails(lead.name, `<p>${context}</p>
-        <ol class="details-list">${history.map(step => `<li>${escape(step)}</li>`).join('')}</ol>` + activity +
-        table(['Pedido', 'Gateway', 'Valor', 'Estado'], orders.map(order =>
-          [escape(order.id), escape(order.gateway || '—'), money(order.total), escape(order.status)])));
-    }
   } catch (error) { notice(error.message, true); }
 });
 
 try {
+  const linkedPeriod = new URLSearchParams(location.search);
+  if ([7, 14, 30].includes(Number(linkedPeriod.get('days')))) contexts.days = Number(linkedPeriod.get('days'));
+  if (linkedPeriod.has('from') && linkedPeriod.has('to')) Object.assign(contexts, { from: linkedPeriod.get('from'), to: linkedPeriod.get('to') });
   const mode = await api('mode');
   if (mode.local) {
     const fields = document.querySelector('#credentials');
@@ -520,7 +593,7 @@ try {
     document.querySelector('#login-action').textContent = 'Abrir painel de teste';
   }
   const session = await api('session').catch(() => null);
-  if (session) { account(session.operator); await render(); }
+  if (session) { account(session.operator); await render(); openLinkedLead(); }
 } catch (error) {
   notice(error.message, true);
   document.querySelector('#login-action').disabled = true;
