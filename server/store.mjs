@@ -20,12 +20,19 @@ export function memoryStore() {
     async readTraffic(since) {
       return [...traffic.values()].filter(event => event.day >= since);
     },
+    async allowLoginAttempt(bucket) {
+      return await request('', {
+        method: 'POST',
+        body: JSON.stringify({ p_bucket: bucket }),
+      }, new URL('/rest/v1/rpc/campaign_allow_admin_login', url)) === true;
+    },
   };
 }
 
 export function supabaseStore({ url, secret, fetch }) {
   if (!url || !secret) throw new HttpError(503, 'Banco do painel ainda não configurado.');
   const endpoint = new URL('/rest/v1/campaign_admin_state', url);
+  const sessions = new URL('/rest/v1/campaign_admin_sessions', url);
   const headers = {
     apikey: secret,
     'Content-Type': 'application/json',
@@ -37,6 +44,7 @@ export function supabaseStore({ url, secret, fetch }) {
     const response = await fetch(new URL(`?${query}`, target), {
       ...options,
       headers: { ...headers, ...options.headers },
+      redirect: 'error',
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) throw new HttpError(503, 'Banco do painel indisponível.');
@@ -67,6 +75,24 @@ export function supabaseStore({ url, secret, fetch }) {
     async readTraffic(since) {
       return request(`day=gte.${since}&select=page,session,day&order=day.desc&limit=1000`, {},
         new URL('/rest/v1/campaign_demo_traffic', url));
+    },
+    async replaceAdminSession(session) {
+      await request('on_conflict=operator_id', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(session),
+      }, sessions);
+    },
+    async readAdminSession(digest, at) {
+      const query = new URLSearchParams({ token_digest: `eq.${digest}`, expires_at: `gt.${at}`, select: 'operator_id', limit: 1 });
+      const [row] = await request(query, {}, sessions);
+      return row;
+    },
+    async revokeAdminSession(digest) {
+      await request(`token_digest=eq.${digest}`, {
+        method: 'DELETE',
+        headers: { Prefer: 'return=minimal' },
+      }, sessions);
     },
   };
 }

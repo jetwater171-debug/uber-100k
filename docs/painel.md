@@ -14,15 +14,18 @@ Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente
 
 ## Publicar o painel autenticado
 
-1. Crie um projeto Supabase para esta campanha. Aplique a migração em `supabase/migrations/20261125000000_campaign_admin_state.sql`.
-2. Crie as contas dos operadores no Supabase Auth e anote seus IDs. Configure `CAMPAIGN_ADMIN_USER_IDS` com os IDs autorizados separados por vírgula.
-3. Cadastre `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` e `SUPABASE_ADMIN_SECRET_KEY` nas variáveis do projeto da Vercel. A última variável é exclusiva do servidor.
-4. Use Node.js 24 e o `vercel.json` do repositório. O build copia somente os arquivos públicos permitidos para `dist`. A função em `api/admin.mjs` serve as consultas e os comandos do painel.
-5. Em uma prévia autorizada, entre em `/admin`, salve uma configuração, atualize a página e confira a persistência. Verifique o acesso bloqueado fora da lista de contas e a contagem do tracking de teste.
+1. Crie um projeto Supabase para esta campanha e aplique as migrações em `supabase/migrations` em ordem de nome.
+2. Cadastre `SUPABASE_URL`, `SUPABASE_ADMIN_SECRET_KEY` e `CAMPAIGN_ADMIN_PASSWORD` nas variáveis do projeto da Vercel. Guarde a chave e a senha com o tipo **Secret**.
+3. Use Node.js 24 e o `vercel.json` do repositório. O build copia somente os arquivos públicos permitidos para `dist`. A função em `api/admin.mjs` serve as consultas e os comandos do painel.
+4. Faça um novo deploy para aplicar as variáveis. Entre em `/admin` com a senha configurada, salve uma configuração, atualize a página e confira a persistência. Verifique a revogação depois de sair e a contagem do tracking de teste.
 
-Configurações ausentes mantêm o painel hospedado indisponível. A persistência com um banco remoto, autenticação com uma conta Supabase real e o deploy da Vercel precisam ser verificados no projeto configurado.
+Configurações ausentes mantêm o painel hospedado indisponível.
+
+O painel usa um login compartilhado por senha e limita as tentativas de entrada a dez por origem em cinco minutos. Há uma sessão ativa de até 30 minutos no ambiente. Entrar em outro navegador encerra a sessão anterior. O banco guarda um resumo criptográfico do identificador aleatório do cookie. Sair remove a sessão e alterar a senha invalida as sessões anteriores.
+
+Use `npm run check:supabase` com as variáveis de conexão do projeto de teste no ambiente ou em `.env.local` para conferir a leitura das tabelas de configurações, sessões e visitas. O comando mostra nomes de variáveis ausentes e o resultado das consultas, preservando os valores das chaves.
 
 ## Verificações locais
 
-- `npm test` verifica sessão, controle de origem, concorrência, tracking, relatórios, exportação, testes PIX, pedidos da jornada, reconciliação, deduplicação da fila e os contratos do adaptador Supabase.
+- `npm test` verifica sessão, revogação, controle de origem, concorrência, tracking, relatórios, exportação, testes PIX, pedidos da jornada, reconciliação, deduplicação da fila e os contratos do adaptador Supabase.
 - `npm run build` gera a publicação estática em `dist`.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { adminHandler } from '../server/admin.mjs';
-import { localAuth } from '../server/auth.mjs';
+import { localAuth, passwordAuth } from '../server/auth.mjs';
 import { memoryStore, supabaseStore } from '../server/store.mjs';
 import { gateways } from '../server/fixtures.mjs';
 import { csv } from '../server/reports.mjs';
@@ -46,6 +46,56 @@ test('private routes require session and state mutations reject cross-origin req
   assert.equal((await request('settings')).status, 200);
   assert.equal((await request('logout', { body: {} })).status, 200);
   assert.equal((await request('settings')).status, 401);
+});
+
+test('hosted password login limits attempts and uses a revocable opaque cookie', async () => {
+  const sessions = new Map();
+  let clock = Date.UTC(2026, 10, 25);
+  let allowed = true;
+  const buckets = [];
+  const options = {
+    password: 'password-fixture', secret: 'db-secret-fixture', trustVercel: true, now: () => clock,
+    sessions: {
+      async allowLoginAttempt(bucket) { buckets.push(bucket); return allowed; },
+      async replaceAdminSession(session) { sessions.set(session.operator_id, session); },
+      async readAdminSession(digest, at) {
+        return [...sessions.values()].find(session => session.token_digest === digest && session.expires_at > at);
+      },
+      async revokeAdminSession(digest) {
+        for (const [id, session] of sessions) if (session.token_digest === digest) sessions.delete(id);
+      },
+    },
+  };
+  const auth = passwordAuth(options);
+  const request = cookie => new Request('https://panel.example/api/admin', {
+    headers: { 'x-vercel-forwarded-for': '192.0.2.1', ...(cookie ? { Cookie: cookie } : {}) },
+  });
+  const login = async () => auth.login(request(), { password: options.password });
+  await assert.rejects(auth.login(new Request('http://panel.example/api/admin'), { password: options.password }), { status: 403 });
+  await assert.rejects(auth.login(request(), { password: 'wrong' }), { status: 401 });
+  allowed = false;
+  await assert.rejects(login(), { status: 429 });
+  allowed = true;
+  const { cookie: first, who } = await login();
+  assert.match(first, /^__Secure-campaign-admin=[a-f0-9]{64};/);
+  assert.match(first, /Max-Age=1800; Secure/);
+  assert.doesNotMatch(first, /password-fixture|db-secret-fixture/);
+  assert.notEqual(sessions.get(who.id).token_digest, first.split('=')[1].split(';')[0]);
+  assert.deepEqual(await auth.verify(request(first)), who);
+  assert.equal(new Set(buckets).size, 1);
+  assert.match(buckets[0], /^[a-f0-9]{64}$/);
+  const { cookie: second } = await login();
+  await assert.rejects(auth.verify(request(first)), { status: 401 });
+  await auth.logout(request(first));
+  assert.deepEqual(await auth.verify(request(second)), who);
+  await auth.logout(request(second));
+  await assert.rejects(auth.verify(request(second)), { status: 401 });
+  const { cookie: third } = await login();
+  clock += 1800001;
+  await assert.rejects(auth.verify(request(third)), { status: 401 });
+  const { cookie: fourth } = await login();
+  const rotated = passwordAuth({ ...options, password: 'rotated-fixture' });
+  await assert.rejects(rotated.verify(request(fourth)), { status: 401 });
 });
 
 test('demo PIX is available through all six gateway actions and audit entries are stored', async () => {
@@ -173,6 +223,23 @@ test('reports support search, period, pagination and CSV in the same environment
   assert.match(data.headers.get('Content-Disposition'), /vendas-teste.csv/);
   assert.match(await data.text(), /Pedido|PED-/);
   assert.match(csv([{ field: '=1+1' }], [['Cabeçalho', 'field']]), /"'=1\+1"/);
+});
+
+test('view requests return one consistent snapshot with section-specific records', async () => {
+  const { request, login } = fixture();
+  await login();
+  const pages = await (await request('view', { query: { section: 'pages', days: '14' } })).json();
+  assert.deepEqual(Object.keys(pages.state).sort(), ['settings', 'version']);
+  assert.equal(pages.data.days, 14);
+  assert.equal(pages.traffic.rows.length, 6);
+  const catalog = await (await request('view', { query: { section: 'catalog' } })).json();
+  assert.equal(catalog.state.catalog.length, 6);
+  assert.equal(catalog.data, undefined);
+  const sales = await (await request('view', { query: { section: 'sales', page: '1' } })).json();
+  assert(sales.data.items.length > 0);
+  assert(sales.data.items.length <= sales.data.perPage);
+  assert.equal(sales.state.orders, undefined);
+  assert.equal((await request('view', { query: { section: 'outside' } })).status, 404);
 });
 
 test('Supabase store sends compare-and-swap and deduplicated insert requests', async () => {

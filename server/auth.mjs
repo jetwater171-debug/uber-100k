@@ -1,22 +1,36 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import { HttpError } from './errors.mjs';
 
 const cookieName = 'campaign-admin';
+const hostedCookieName = '__Secure-campaign-admin';
 const sameSite = 'Path=/api/admin; HttpOnly; SameSite=Strict';
+const hostedOperator = { id: '00000000-0000-4000-8000-000000000001', name: 'Administrador' };
+const lifetime = 1800;
 
-function cookie(request, value, seconds) {
+function cookie(request, value, seconds, name = cookieName) {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
-  return `${cookieName}=${value}; ${sameSite}; Max-Age=${seconds}${secure}`;
+  return `${name}=${value}; ${sameSite}; Max-Age=${seconds}${secure}`;
 }
 
-function token(request) {
+function token(request, name = cookieName) {
   const cookies = request.headers.get('Cookie') || '';
-  return cookies.split(';').map(entry => entry.trim()).find(entry => entry.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
+  return cookies.split(';').map(entry => entry.trim()).find(entry => entry.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+function digest(secret) {
+  return createHash('sha256').update(secret).digest();
+}
+
+function hostedToken(request) {
+  if (new URL(request.url).protocol !== 'https:') throw new HttpError(403, 'Acesse o painel hospedado por HTTPS.');
+  const value = token(request, hostedCookieName);
+  return /^[a-f0-9]{64}$/.test(value || '') ? value : null;
 }
 
 export function localAuth() {
   let session;
-  const who = { id: 'local-demo', email: 'Operador local' };
+  const who = { id: 'local-demo', name: 'Operador local' };
   function requireLoopback(request) {
     if (!['localhost', '127.0.0.1'].includes(new URL(request.url).hostname)) {
       throw new HttpError(403, 'O modo de demonstração local exige acesso pelo próprio computador.');
@@ -44,52 +58,44 @@ export function localAuth() {
   };
 }
 
-export function supabaseAuth({ url, key, users, fetch }) {
-  async function auth(path, options = {}) {
-    const response = await fetch(new URL(`/auth/v1/${path}`, url), {
-      ...options,
-      headers: { apikey: key, 'Content-Type': 'application/json', ...options.headers },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (response.status === 429) throw new HttpError(429, 'Aguarde antes de tentar entrar novamente.');
-    if (response.status >= 500) throw new HttpError(503, 'Autenticação indisponível.');
-    return response;
-  }
+export function passwordAuth({ password, secret, sessions, trustVercel = false, now = Date.now }) {
+  const verifier = digest(password);
+  const sessionKey = createHmac('sha256', secret).update(verifier).digest();
+  const sessionDigest = value => createHmac('sha256', sessionKey).update(value).digest('hex');
 
-  function operator(user) {
-    if (!users.has(user?.id)) throw new HttpError(401, 'Conta sem acesso ao painel.');
-    return { id: user.id, email: user.email };
-  }
-
-  if (!url || !key || !users.size) throw new HttpError(503, 'A autenticação do painel ainda não foi configurada.');
   return {
     demo: false,
-    async login(request, { email, password }) {
-      if (typeof email !== 'string' || email.length > 254 || typeof password !== 'string' || !password || password.length > 256) {
-        throw new HttpError(400, 'Informe e-mail e senha válidos.');
+    async login(request, { password: candidate }) {
+      hostedToken(request);
+      if (typeof candidate !== 'string' || !candidate || candidate.length > 256) {
+        throw new HttpError(400, 'Informe a senha do painel.');
       }
-      const response = await auth('token?grant_type=password', {
-        method: 'POST',
-        body: JSON.stringify({ email: email.trim(), password }),
+      const forwarded = trustVercel ? request.headers.get('x-vercel-forwarded-for')?.trim() : '';
+      const source = isIP(forwarded || '') ? forwarded : 'default';
+      const bucket = createHmac('sha256', secret).update(`login:${source}`).digest('hex');
+      if (!await sessions.allowLoginAttempt(bucket)) {
+        throw new HttpError(429, 'Limite de tentativas atingido. Aguarde alguns minutos.');
+      }
+      if (!timingSafeEqual(verifier, digest(candidate))) throw new HttpError(401, 'Senha incorreta.');
+      const value = randomBytes(32).toString('hex');
+      await sessions.replaceAdminSession({
+        operator_id: hostedOperator.id,
+        token_digest: sessionDigest(value),
+        expires_at: new Date(now() + lifetime * 1000).toISOString(),
       });
-      if (!response.ok) throw new HttpError(401, 'E-mail ou senha inválidos.');
-      const data = await response.json();
-      if (!/^[\w.-]+$/.test(data.access_token || '') || !Number.isInteger(data.expires_in) || data.expires_in <= 0) {
-        throw new HttpError(503, 'A sessão não pôde ser iniciada.');
-      }
-      return { who: operator(data.user), cookie: cookie(request, data.access_token, Math.min(data.expires_in, 3600)) };
+      return { who: hostedOperator, cookie: cookie(request, value, lifetime, hostedCookieName) };
     },
     async verify(request) {
-      const session = token(request);
+      const session = hostedToken(request);
       if (!session) throw new HttpError(401, 'Entre no painel para continuar.');
-      const response = await auth('user', { headers: { Authorization: `Bearer ${session}` } });
-      if (!response.ok) throw new HttpError(401, 'Sua sessão expirou. Entre novamente.');
-      return operator(await response.json());
+      const row = await sessions.readAdminSession(sessionDigest(session), new Date(now()).toISOString());
+      if (row?.operator_id !== hostedOperator.id) throw new HttpError(401, 'Sua sessão expirou. Entre novamente.');
+      return hostedOperator;
     },
     async logout(request) {
-      const session = token(request);
-      if (session) await auth('logout?scope=local', { method: 'POST', headers: { Authorization: `Bearer ${session}` } });
-      return cookie(request, '', 0);
+      const session = hostedToken(request);
+      if (session) await sessions.revokeAdminSession(sessionDigest(session));
+      return cookie(request, '', 0, hostedCookieName);
     },
   };
 }

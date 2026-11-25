@@ -93,6 +93,39 @@ function amend(state, command, at) {
 const trackedPages = ['inicio', 'oferta', 'cadastro', 'questionario', 'regiao', 'analise'];
 const leadFields = ['id', 'name', 'city', 'origin', 'device'];
 const saleFields = ['id', 'sessionId', 'gateway'];
+const sections = ['overview', 'pages', 'leads', 'audience', 'sales', 'catalog', 'gateways',
+  'tracking', 'utmfy', 'sms', 'queue', 'navigation', 'security'];
+
+async function trafficReport(store, since) {
+  const visits = await store.readTraffic(since);
+  const counts = new Map();
+  for (const row of visits) counts.set(row.page, (counts.get(row.page) || 0) + 1);
+  return {
+    rows: trackedPages.map(page => ({ page, count: counts.get(page) || 0 })),
+    limit: visits.length >= 1000,
+  };
+}
+
+async function viewReport(store, params, time) {
+  const section = params.get('section');
+  if (!sections.includes(section)) throw new HttpError(404, 'Seção indisponível.');
+  const snapshot = await store.read();
+  const state = { version: snapshot.version, settings: snapshot.settings };
+  if (section === 'catalog') state.catalog = snapshot.catalog;
+  if (['utmfy', 'sms', 'security'].includes(section)) state.audit = snapshot.audit;
+  if (section === 'sms') {
+    state.orders = snapshot.orders.filter(order => order.status === 'Pendente no teste');
+    state.queue = snapshot.queue.filter(job => job.event === 'Remarketing');
+  }
+  if (section === 'queue') state.queue = snapshot.queue;
+  if (['catalog', 'tracking', 'utmfy', 'sms', 'queue', 'security'].includes(section)) return { state };
+
+  const { leads, orders, ...overview } = reports(params, time, snapshot.orders);
+  if (section === 'leads') return { state, data: filterRows(leads, params, leadFields) };
+  if (section === 'sales') return { state, data: filterRows(orders, params, saleFields) };
+  if (section === 'pages') return { state, data: overview, traffic: await trafficReport(store, overview.daily[0].day) };
+  return { state, data: overview };
+}
 
 async function saveOperation(store, state, result, operator, at) {
   const previous = state.version;
@@ -145,6 +178,7 @@ export function adminHandler({ auth, store, now = Date.now }) {
       }
       if (request.method !== 'GET') throw new HttpError(404, 'Rota indisponível.');
       if (route === 'session') return json({ operator, prototype: true });
+      if (route === 'view') return json(await viewReport(store, url.searchParams, now()));
       if (route === 'settings') return json(await store.read());
       const supported = ['traffic', 'overview', 'leads', 'sales', 'lead', 'order', 'export'];
       if (!supported.includes(route)) throw new HttpError(404, 'Rota indisponível.');
@@ -156,12 +190,7 @@ export function adminHandler({ auth, store, now = Date.now }) {
       const orders = ['overview', 'sales', 'export'].includes(route) ? (await store.read()).orders : [];
       const data = reports(url.searchParams, now(), orders);
       if (route === 'traffic') {
-        const since = data.daily[0].day;
-        const visits = await store.readTraffic(since);
-        return json({ rows: trackedPages.map(page => ({
-          page,
-          count: visits.filter(row => row.page === page).length,
-        })), limit: visits.length >= 1000 });
+        return json(await trafficReport(store, data.daily[0].day));
       }
       if (route === 'overview') {
         const { leads, orders: transactions, ...overview } = data;

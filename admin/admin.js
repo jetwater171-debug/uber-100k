@@ -36,8 +36,8 @@ const selected = value => value ? ' selected' : '';
 const section = () => Object.hasOwn(sectionNames, location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
 const params = (fields = {}) => new URLSearchParams({ ...contexts, ...fields });
 
-async function api(route, options) {
-  const query = params({ route });
+async function api(route, options, filters = {}) {
+  const query = params({ ...filters, route });
   const response = await fetch(`/api/admin?${query}`, options && {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,7 +60,7 @@ function account(user) {
   view.hidden = !user;
   navigation.hidden = !user;
   document.querySelector('#operator').hidden = !user;
-  document.querySelector('#operator-name').textContent = user?.email || '';
+  document.querySelector('#operator-name').textContent = user?.name || '';
   if (!user) view.replaceChildren();
 }
 
@@ -208,14 +208,11 @@ async function render() {
   nav(active);
   view.setAttribute('aria-busy', 'true');
   try {
-    const [settings, data, traffic] = await Promise.all([
-      api('settings'),
-      api(['leads','sales'].includes(active) ? active : 'overview'),
-      active === 'pages' ? api('traffic') : null,
-    ]);
+    const response = await api('view', undefined, { section: active });
     if (current !== sequence || !operator) return;
-    state = settings;
-    const placeholderHistory = state.audit.filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
+    const { data, traffic } = response;
+    state = response.state;
+    const placeholderHistory = (state.audit || []).filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
     const renderers = {
       overview: () => dashboard(data),
       pages: () => title('Páginas e funil', 'Compare as visitas da jornada acompanhada com o funil de exemplo.') + range() + '</div><div class="columns">' +
