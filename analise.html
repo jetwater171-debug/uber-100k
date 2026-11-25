@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#000000">
   <title>Análise do perfil | Uber Driver</title>
   <link rel="stylesheet" href="styles.css?v=44">
-  <link rel="stylesheet" href="analise.css?v=33">
+  <link rel="stylesheet" href="analise.css?v=34">
   <script src="fluxo.js?v=1" defer></script>
-  <script src="analise.js?v=17" defer></script>
-  <script src="demo-tracking.js?v=2" defer></script>
+  <script src="analise.js?v=18" defer></script>
+  <script src="demo-tracking.js?v=3" defer></script>
 </head>
 <body class="review-screen">
   <header class="site-header">
@@ -123,7 +123,7 @@
               <span class="approved-description">Duas lentes para gravar a rua e a cabine.</span>
               <span class="approved-prices">
                 <data class="approved-original-price" value="34990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;349,90</del></data>
-                <data class="approved-price" id="price-camera" value="3990"><span class="sr-only">Preço da oferta </span>R$&nbsp;39,90</data>
+                <data class="approved-price" id="price-camera" value="3990"><span class="sr-only">Preço da oferta </span><span class="approved-price-amount">R$&nbsp;39,90</span></data>
               </span>
               <span class="approved-required" id="offer-required"><span class="approved-shield" aria-hidden="true"></span>Item obrigatório da promoção</span>
             </span>
@@ -144,7 +144,7 @@
               <span class="approved-description">Fixação segura e carregamento rápido.</span>
               <span class="approved-prices">
                 <data class="approved-original-price" value="14990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;149,90</del></data>
-                <data class="approved-price" id="price-suporte" value="2990"><span class="sr-only">Preço da oferta </span>R$&nbsp;29,90</data>
+                <data class="approved-price" id="price-suporte" value="2990"><span class="sr-only">Preço da oferta </span><span class="approved-price-amount">R$&nbsp;29,90</span></data>
               </span>
             </span>
             <span class="approved-box" aria-hidden="true"></span>
@@ -164,7 +164,7 @@
               <span class="approved-description">Compressor, macaco e partida de emergência.</span>
               <span class="approved-prices">
                 <data class="approved-original-price" value="39990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;399,90</del></data>
-                <data class="approved-price" id="price-compressor" value="9990"><span class="sr-only">Preço da oferta </span>R$&nbsp;99,90</data>
+                <data class="approved-price" id="price-compressor" value="9990"><span class="sr-only">Preço da oferta </span><span class="approved-price-amount">R$&nbsp;99,90</span></data>
               </span>
             </span>
             <span class="approved-box" aria-hidden="true"></span>
@@ -184,7 +184,7 @@
               <span class="approved-description">Mais navegação, corridas e praticidade no seu dia a dia.</span>
               <span class="approved-prices">
                 <data class="approved-original-price" value="59990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;599,90</del></data>
-                <data class="approved-price" id="price-tablet" value="14990"><span class="sr-only">Preço da oferta </span>R$&nbsp;149,90</data>
+                <data class="approved-price" id="price-tablet" value="14990"><span class="sr-only">Preço da oferta </span><span class="approved-price-amount">R$&nbsp;149,90</span></data>
               </span>
             </span>
             <span class="approved-box" aria-hidden="true"></span>
@@ -204,7 +204,7 @@
               <span class="approved-description">Super-resistente e impermeável, protege os bancos no dia a dia.</span>
               <span class="approved-prices">
                 <data class="approved-original-price" value="8000"><span class="sr-only">Preço anterior </span><del>R$&nbsp;80,00</del></data>
-                <data class="approved-price" id="price-capa-bancos" value="990"><span class="sr-only">Preço da oferta </span>R$&nbsp;9,90</data>
+                <data class="approved-price" id="price-capa-bancos" value="990"><span class="sr-only">Preço da oferta </span><span class="approved-price-amount">R$&nbsp;9,90</span></data>
               </span>
             </span>
             <span class="approved-box" aria-hidden="true"></span>
@@ -224,7 +224,7 @@
               <span class="approved-description">Carregue seu celular por cabo ou indução.</span>
               <span class="approved-prices">
                 <data class="approved-original-price" value="12990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;129,90</del></data>
-                <data class="approved-price" id="price-powerbank" value="3590"><span class="sr-only">Preço da oferta </span>R$&nbsp;35,90</data>
+                <data class="approved-price" id="price-powerbank" value="3590"><span class="sr-only">Preço da oferta </span><span class="approved-price-amount">R$&nbsp;35,90</span></data>
               </span>
             </span>
             <span class="approved-box" aria-hidden="true"></span>
@@ -233,6 +233,7 @@
       </ul>
 
       <div class="approved-footer">
+        <p class="approved-dialog-note" id="demo-catalog-note" role="status" hidden></p>
         <div class="approved-summary" id="approved-selection" role="status">
           <span class="approved-cart" aria-hidden="true"><span></span></span>
           <div class="approved-summary-label">

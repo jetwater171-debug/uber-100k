@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { channels, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports } from './reports.mjs';
 import { HttpError } from './errors.mjs';
-import { createDemoOrder, paymentForOrder, processQueue, queueReminder, queueTest, reconcileOrder, uuid } from './operations.mjs';
+import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueReminder, queueTest, reconcileOrder, uuid } from './operations.mjs';
 
 function json(data, status = 200, headers = {}) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
@@ -178,6 +178,10 @@ export function adminHandler({ auth, store, now = Date.now }) {
       }
       if (request.method !== 'GET') throw new HttpError(404, 'Rota indisponível.');
       if (route === 'session') return json({ operator, prototype: true });
+      if (route === 'demo-catalog') {
+        const items = demoCatalog(await store.read()).map(({ id, cents }) => ({ id, cents }));
+        return json({ items });
+      }
       if (route === 'view') return json(await viewReport(store, url.searchParams, now()));
       if (route === 'settings') return json(await store.read());
       const supported = ['traffic', 'overview', 'leads', 'sales', 'lead', 'order', 'export'];

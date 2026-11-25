@@ -421,6 +421,7 @@
 }
 
 .approved-list > li { display: grid; min-width: 0; }
+.approved-list > li[hidden], .approved-discount[hidden], #demo-order-create[hidden] { display: none; }
 
 .approved-card {
   display: grid;

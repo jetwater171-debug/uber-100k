@@ -18,14 +18,48 @@ const demoOrder = document.getElementById('demo-order');
 const demoOrderCreate = document.getElementById('demo-order-create');
 const demoOrderResult = document.getElementById('demo-order-result');
 const demoOrderLink = document.getElementById('demo-order-link');
+const demoCatalogNote = document.getElementById('demo-catalog-note');
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const percent = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 });
 
-for (const card of offerList.querySelectorAll('.approved-card')) {
+function updateDiscount(card) {
   const original = Number(card.querySelector('.approved-original-price').value);
   const current = Number(card.querySelector('.approved-price').value);
-  const discount = percent.format((original - current) / original);
-  card.querySelector('.approved-discount').textContent = `${discount} OFF`;
+  const badge = card.querySelector('.approved-discount');
+  badge.hidden = current >= original;
+  badge.textContent = current < original ? `${percent.format((original - current) / original)} OFF` : '';
+}
+
+const cards = [...offerList.querySelectorAll('.approved-card')];
+for (const card of cards) updateDiscount(card);
+
+let catalogReady = false;
+async function refreshDemoCatalog() {
+  if (!window.campaignDemo) return;
+  try {
+    const prices = new Map((await window.campaignDemo.catalog()).map(item => [item.id, item.cents]));
+    for (const card of cards) {
+      const option = card.querySelector('.approved-option');
+      const cents = prices.get(option.value);
+      card.parentElement.hidden = cents === undefined;
+      if (cents === undefined) {
+        option.checked = false;
+        continue;
+      }
+      if (option.value === 'camera') option.checked = true;
+      const price = card.querySelector('.approved-price');
+      price.value = cents;
+      price.querySelector('.approved-price-amount').textContent = currency.format(cents / 100);
+      updateDiscount(card);
+    }
+    catalogReady = prices.has('camera');
+    demoCatalogNote.textContent = catalogReady ? '' : 'A câmera está indisponível no catálogo de teste.';
+  } catch {
+    catalogReady = false;
+    demoCatalogNote.textContent = 'Catálogo de teste indisponível. Abra uma nova jornada pelo painel.';
+  }
+  demoCatalogNote.hidden = !demoCatalogNote.textContent;
+  syncSelection();
 }
 
 function selectedOffers() {
@@ -50,7 +84,7 @@ function syncSelection() {
 offerList.addEventListener('change', syncSelection);
 window.addEventListener('pageshow', syncSelection);
 
-approvedAction.addEventListener('click', () => {
+function renderSelection() {
   const rows = syncSelection().map(offer => {
     const row = document.createElement('li');
     const price = document.createElement('strong');
@@ -60,7 +94,12 @@ approvedAction.addEventListener('click', () => {
   });
   selectionItems.replaceChildren(...rows);
   selectionTotal.textContent = approvedTotal.textContent;
-  demoOrder.hidden = !window.campaignDemo;
+}
+
+approvedAction.addEventListener('click', () => {
+  renderSelection();
+  demoOrder.hidden = !catalogReady;
+  demoOrderCreate.hidden = false;
   demoOrderResult.hidden = true;
   demoOrderLink.hidden = true;
   selectionDialog.showModal();
@@ -71,11 +110,18 @@ demoOrderCreate.addEventListener('click', async () => {
   demoOrderResult.hidden = false;
   demoOrderResult.textContent = 'Salvando pedido de teste…';
   try {
-    const order = await window.campaignDemo.createOrder(selectedOffers().map(offer => offer.id));
+    const offers = selectedOffers();
+    const total = offers.reduce((amount, offer) => amount + offer.cents, 0);
+    const order = await window.campaignDemo.createOrder(offers.map(offer => offer.id), total);
     demoOrderResult.textContent = `Pedido de teste salvo · ${currency.format(order.total / 100)}`;
     demoOrderLink.hidden = false;
   } catch (error) {
     demoOrderResult.textContent = error.message;
+    if (error.status === 409) {
+      await refreshDemoCatalog();
+      renderSelection();
+      demoOrderCreate.hidden = !catalogReady;
+    }
   } finally {
     demoOrderCreate.disabled = false;
   }
@@ -124,6 +170,7 @@ function advanceReview(elapsed, duration) {
 }
 
 async function runReview() {
+  const catalogRequest = refreshDemoCatalog();
   const rows = [...reviewPanel.querySelectorAll('.review-row')];
   reviewProgress.hidden = false;
   reviewPanel.hidden = false;
@@ -162,6 +209,7 @@ async function runReview() {
   reviewSimulation.textContent = 'Ofertas liberadas';
   reviewAnnouncement.textContent = 'Ofertas liberadas na simulação.';
   await advanceReview(elapsed, revealDuration);
+  await catalogRequest;
 
   reviewPage.hidden = true;
   approvedPage.hidden = false;
@@ -169,4 +217,4 @@ async function runReview() {
   reviewAnnouncement.textContent = 'Perfil aprovado na simulação. Confira os itens disponíveis para seleção.';
 }
 
-runReview();
+document.addEventListener('DOMContentLoaded', runReview, { once: true });

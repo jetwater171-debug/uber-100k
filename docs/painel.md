@@ -6,7 +6,7 @@ O painel tem treze seções. Visão geral, funil, cadastros, público, vendas, c
 
 Com Node.js 24 instalado, execute `npm run dev` na pasta do projeto e abra [o painel local](http://127.0.0.1:4280/admin). Use **Abrir painel de teste**. A sessão e as mudanças de configuração são mantidas em memória durante essa execução. **Páginas e funil → Abrir jornada com tracking** abre o site e registra a passagem pelas seis páginas. Volte ao painel e use **Atualizar** para consultar as contagens. O tracking identifica apenas a sessão de teste e a página visitada.
 
-Na jornada acompanhada, selecione os produtos e use **Criar pedido de teste** no resumo. O servidor registra o preço vigente do catálogo de teste e usa uma chave por seleção para impedir pedidos duplicados em tentativas repetidas.
+Na jornada acompanhada, a lista de produtos aplica os preços e a disponibilidade do catálogo do painel. Selecione os produtos e use **Criar pedido de teste** no resumo. O servidor confere o total exibido e usa uma chave por seleção e total para impedir pedidos duplicados em tentativas repetidas.
 
 Em **Vendas → Ver pedido**, gere um PIX de teste em um gateway ativo e simule a confirmação ou o cancelamento. A origem **Jornada acompanhada** identifica os pedidos criados no fluxo. Os demais registros são amostras. Os seis gateways emitem identificadores de simulação sem valor de cobrança. Os eventos do pedido entram na **Fila de testes** conforme a configuração de cada canal e podem ser processados em lotes de até vinte. A confirmação repetida mantém uma única entrada de compra por canal. Os testes de Meta, TikTok, UTMfy, Pushcut e SMSMais também podem ser enfileirados manualmente.
 

@@ -156,6 +156,25 @@ test('journey orders use server prices and an idempotent request key', async () 
   assert.equal(sales.items[0].id, order.id);
 });
 
+test('the private journey catalog reflects prices and availability, with explicit acceptance after price changes', async () => {
+  const { request, login } = fixture();
+  assert.equal((await request('demo-catalog', { auth: false })).status, 401);
+  await login();
+  const edit = (key, value, version, type = 'catalog') => request('command', { body: { type, key, value, version } });
+  assert.equal((await edit('camera', { cents: 4500, active: true }, 0)).status, 200);
+  assert.equal((await edit('powerbank', { cents: 3590, active: false }, 1)).status, 200);
+  const { items } = await (await request('demo-catalog')).json();
+  assert.deepEqual(items.find(item => item.id === 'camera'), { id: 'camera', cents: 4500 });
+  assert.equal(items.some(item => item.id === 'powerbank'), false);
+  assert.equal((await edit('offerExtras', false, 2, 'feature')).status, 200);
+  assert.deepEqual((await (await request('demo-catalog')).json()).items, [{ id: 'camera', cents: 4500 }]);
+  const order = { session: sessionId, requestId: sessionId, items: ['camera'] };
+  assert.equal((await request('demo-order', { body: { ...order, quotedTotal: 3990 } })).status, 409);
+  const accepted = await request('demo-order', { body: { ...order, quotedTotal: 4500 } });
+  assert.equal(accepted.status, 201);
+  assert.equal((await accepted.json()).total, 4500);
+});
+
 test('PIX reconciliation records purchase once and processes pending jobs idempotently', async () => {
   const { request, login } = fixture();
   await login();

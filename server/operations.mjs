@@ -10,7 +10,11 @@ export const status = {
 
 export const uuid = /^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/iu;
 
-export function createDemoOrder(state, { session, requestId, items }, at) {
+export function demoCatalog(state) {
+  return state.catalog.filter(item => item.active && (item.id === 'camera' || state.settings.offerExtras));
+}
+
+export function createDemoOrder(state, { session, requestId, items, quotedTotal }, at) {
   if (typeof session !== 'string' || !uuid.test(session) || typeof requestId !== 'string' || !uuid.test(requestId)) {
     throw new HttpError(400, 'Abra uma jornada de teste pelo painel.');
   }
@@ -27,15 +31,18 @@ export function createDemoOrder(state, { session, requestId, items }, at) {
     return { order: existing, created: false };
   }
   if (state.orders.length >= 100) throw new HttpError(409, 'O ambiente atingiu o limite de pedidos de teste.');
-  const selection = state.catalog.filter(item =>
-    items.includes(item.id) && item.active && (item.id === 'camera' || state.settings.offerExtras));
+  const selection = demoCatalog(state).filter(item => items.includes(item.id));
   if (selection.length !== items.length) throw new HttpError(409, 'Um produto saiu do catálogo de teste.');
+  const total = selection.reduce((amount, item) => amount + item.cents, 0);
+  if (quotedTotal !== undefined && quotedTotal !== total) {
+    throw new HttpError(409, 'O preço mudou. Confira o novo total antes de criar o pedido.');
+  }
   const order = {
     id: `DEMO-${randomUUID()}`,
     sessionId: session,
     requestId,
     items: selection.map(({ id, name, cents }) => ({ id, name, cents })),
-    total: selection.reduce((total, item) => total + item.cents, 0),
+    total,
     gateway: '',
     status: status.awaiting,
     createdAt: at,
