@@ -103,10 +103,12 @@ const sections = ['overview', 'pages', 'leads', 'audience', 'sales', 'catalog', 
 async function trafficReport(store, since) {
   const visits = await store.readTraffic(since);
   const counts = new Map();
+  const dayCounts = new Map();
   const stageByPage = new Map(trackedPages.map((page, index) => [page, index]));
   const furthestStageBySession = new Map();
   for (const row of visits) {
     counts.set(row.page, (counts.get(row.page) || 0) + 1);
+    dayCounts.set(row.day, (dayCounts.get(row.day) || 0) + 1);
     const stage = stageByPage.get(row.page);
     if (stage > (furthestStageBySession.get(row.session) ?? -1)) furthestStageBySession.set(row.session, stage);
   }
@@ -116,6 +118,8 @@ async function trafficReport(store, since) {
     rows: trackedPages.map(page => ({ page, count: counts.get(page) || 0 })),
     furthestPages: trackedPages.map((page, index) => ({ page, count: stageCounts[index] })),
     sessions: furthestStageBySession.size,
+    pageViews: visits.length,
+    daily: Array.from(dayCounts, ([day, count]) => ({ day, count })).sort((first, next) => first.day.localeCompare(next.day)),
     limit: visits.length >= 1000,
   };
 }
@@ -140,7 +144,7 @@ async function viewReport(store, params, time) {
     return { state, data: { ...filterRows(records.rows, params, leadFields), limited: records.limited } };
   }
   if (section === 'sales') return { state, data: filterRows(orders, params, saleFields) };
-  if (['pages', 'navigation'].includes(section)) {
+  if (['overview', 'pages', 'navigation'].includes(section)) {
     return { state, data: overview, traffic: await trafficReport(store, overview.daily[0].day) };
   }
   return { state, data: overview };

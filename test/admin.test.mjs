@@ -143,6 +143,9 @@ test('tracking counts actual demo navigation once per day, with a private bounde
   assert.deepEqual(traffic.furthestPages.filter(row => row.count), [
     { page: 'inicio', count: 1 }, { page: 'cadastro', count: 1 },
   ]);
+  const overview = await (await request('view', { query: { section: 'overview' } })).json();
+  assert.equal(overview.traffic.pageViews, 3);
+  assert.deepEqual(overview.traffic.daily, [{ day: '2026-11-25', count: 3 }]);
 });
 
 test('journey orders use server prices and an idempotent request key', async () => {

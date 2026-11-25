@@ -58,6 +58,7 @@ input:not([type="checkbox"]), select { min-width: 0; width: 100%; padding: 9px 1
 .primary { color: #fff; background: #111720; }
 .secondary { background: #fff; border-color: #d6dce5; color: #242e3b; }
 .secondary:hover { background: #f1f3f6; }
+.secondary[aria-pressed="true"] { background: #e3f1eb; border-color: #a7d4c1; color: #114637; }
 .feedback { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; color: #114637; background: #dff6ed; font-size: 13px; overflow-wrap: anywhere; }
 .feedback[data-error="true"] { color: #8b2424; background: #fde9e9; }
 .cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); margin-bottom: 12px; }

@@ -23,6 +23,9 @@ const contexts = { days: 7, q: '', page: 1, gateway: '', status: '', source: '' 
 let operator;
 let state;
 let sequence = 0;
+let liveRefresh = false;
+let refreshTimer;
+let updatesInFlight = 0;
 
 function escape(value) {
   return String(value ?? '').replace(/[&<>"']/g, mark => (
@@ -62,6 +65,7 @@ function account(user) {
   document.querySelector('#operator').hidden = !user;
   document.querySelector('#operator-name').textContent = user?.name || '';
   if (!user) view.replaceChildren();
+  scheduleRefresh();
 }
 
 function nav(active) {
@@ -77,6 +81,21 @@ function title(name, copy) {
 function range() {
   return `<label>Período <select id="period">${[7, 14, 30].map(days =>
     `<option value="${days}"${selected(days === contexts.days)}>Últimos ${days} dias</option>`).join('')}</select></label>`;
+}
+
+function liveControls() {
+  return `<div class="controls">${range()}<button class="button secondary" type="button"
+    id="live-refresh" title="Atualiza a cada 30 segundos" aria-pressed="${liveRefresh}">Atualização automática</button></div>`;
+}
+
+function scheduleRefresh() {
+  clearInterval(refreshTimer);
+  if (!operator || !liveRefresh || document.hidden || !['overview', 'pages'].includes(section())) return;
+  refreshTimer = setInterval(() => {
+    if (!updatesInFlight && !view.hasAttribute('aria-busy') && !document.activeElement?.matches('input, select, textarea')) {
+      void render();
+    }
+  }, 30000);
 }
 
 function panel(name, body, badge = '') {
@@ -106,9 +125,9 @@ function auditTable(records) {
     [date.format(new Date(record.at)), escape(record.title), escape(record.detail), escape(record.status || 'Registrado')]));
 }
 
-function dashboard(data) {
+function dashboard(data, traffic) {
   const { counts } = data;
-  return title('Visão geral', 'Acompanhe o funil e as vendas de teste da campanha.') + range() + '</div>' +
+  return title('Visão geral', 'Acompanhe o funil e as vendas de teste da campanha.') + liveControls() + '</div>' +
     '<div class="cards">' + [
       ['Visitas de exemplo', integer.format(counts.visits)], ['Cadastros de exemplo', integer.format(counts.leads)],
       ['Pedidos de teste', integer.format(counts.orders)], ['Pagos no teste', integer.format(counts.paid)],
@@ -117,9 +136,14 @@ function dashboard(data) {
     '<div class="columns">' + panel('Funil da campanha', bars(data.funnel), 'Amostra') +
     panel('Visitas por dia', bars(data.daily.slice(-7).map(item => ({ name: item.day.slice(5).split('-').reverse().join('/'), count: item.visits })))) +
     '</div>' + '<div class="stack dashboard-controls">' + panel('Jornadas registradas neste painel',
-      '<div class="cards">' + metric('Pedidos de jornada', integer.format(counts.testOrders)) +
+      '<div class="cards">' + metric('Sessões acompanhadas', integer.format(traffic.sessions)) +
+      metric('Visitas registradas', integer.format(traffic.pageViews)) +
+      metric('Pedidos de jornada', integer.format(counts.testOrders)) +
       metric('Confirmados em teste', integer.format(counts.testPaid)) +
-      metric('Valor confirmado em teste', money(counts.testRevenue)) + '</div>') + panel('Controles da demonstração', [
+      metric('Valor confirmado em teste', money(counts.testRevenue)) + '</div>', traffic.limit ? 'Últimos 1.000 eventos' : '') +
+    panel('Visitas registradas por dia', bars(traffic.daily.map(({ day, count }) => ({
+      name: day.slice(5).split('-').reverse().join('/'), count,
+    })))) + panel('Controles da demonstração', [
       ['compareGateways', 'Comparar gateways'], ['offerExtras', 'Exibir acessórios no catálogo de teste'],
     ].map(([id, label]) => `<label class="control-row checkbox"><span>${label}</span>
       <input type="checkbox" data-change="feature" data-key="${id}"${checked(state.settings[id])}></label>`).join('')) + '</div>';
@@ -226,8 +250,8 @@ async function render() {
     state = response.state;
     const placeholderHistory = (state.audit || []).filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
     const renderers = {
-      overview: () => dashboard(data),
-      pages: () => title('Páginas e funil', 'Compare as visitas da jornada acompanhada com o funil de exemplo.') + range() + '</div><div class="columns">' +
+      overview: () => dashboard(data, traffic),
+      pages: () => title('Páginas e funil', 'Compare as visitas da jornada acompanhada com o funil de exemplo.') + liveControls() + '</div><div class="columns">' +
         panel('Tracking da jornada de teste', '<p class="empty">Abra o site abaixo e percorra as etapas. A contagem acompanha esta jornada de teste.</p>' +
           '<a href="/?analytics=demo" target="_blank" rel="noopener" class="button primary">Abrir jornada com tracking</a> ' +
           '<button type="button" id="refresh-tracking" class="button secondary">Atualizar</button>' +
@@ -255,7 +279,9 @@ async function render() {
       security: () => title('Auditoria e segurança', 'Histórico das mudanças feitas por operadores neste painel.') + '</div>' +
         panel('Atividade do painel', auditTable(state.audit)),
     };
+    const keepFocus = document.activeElement?.id === 'live-refresh';
     view.innerHTML = renderers[active]();
+    if (keepFocus) view.querySelector('#live-refresh')?.focus({ preventScroll: true });
   } catch (error) {
     if (current === sequence) notice(error.message, true);
   } finally {
@@ -264,11 +290,16 @@ async function render() {
 }
 
 async function command(type, key, value) {
-  const response = await api('command', { type, key, value, version: state.version });
-  state = response.state;
-  await render();
-  notice(response.result.status ? `${response.result.detail} · ${response.result.status}` : response.result.title);
-  return response.result;
+  updatesInFlight++;
+  try {
+    const response = await api('command', { type, key, value, version: state.version });
+    state = response.state;
+    await render();
+    notice(response.result.status ? `${response.result.detail} · ${response.result.status}` : response.result.title);
+    return response.result;
+  } finally {
+    updatesInFlight--;
+  }
 }
 
 function showDetails(titleText, content) {
@@ -339,8 +370,10 @@ document.querySelector('#logout').addEventListener('click', async () => {
 window.addEventListener('hashchange', () => {
   Object.assign(contexts, { q: '', page: 1, gateway: '', status: '', source: '' });
   notice('');
+  scheduleRefresh();
   render();
 });
+document.addEventListener('visibilitychange', scheduleRefresh);
 
 view.addEventListener('submit', async event => {
   event.preventDefault();
@@ -388,6 +421,11 @@ view.addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button) return;
   try {
+    if (button.id === 'live-refresh') {
+      liveRefresh = !liveRefresh;
+      button.setAttribute('aria-pressed', String(liveRefresh));
+      scheduleRefresh();
+    }
     if (button.id === 'refresh-tracking') await render();
     if (button.id === 'process-queue') await command('queue-process');
     if (button.id === 'select-reminders') {
