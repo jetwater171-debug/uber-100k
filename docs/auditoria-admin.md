@@ -35,6 +35,22 @@ Referência auditada em `Desktop/sync/ifoodbag`, commit `188959e`. O inventário
 
 O painel demonstra a operação com exemplos, incluindo pagamentos, eventos de marketing, fila e códigos de status. O fluxo comercial público continua como protótipo. Ativação comercial depende de autorização da marca, identificação do vendedor, regras reais de elegibilidade, dados próprios e revisão das integrações. Cobranças atribuídas a terceiros, manipulação do botão de voltar, geração de vendas artificiais em plataformas de anúncios e contatos sem consentimento ficam fora da base.
 
+## Cobertura do protótipo
+
+| Página de referência | Funcionalidade disponível neste painel |
+| --- | --- |
+| Visão geral | Atualização a cada 30 segundos, sessões, visitas e transações de teste, com controles de catálogo e gateways. |
+| Páginas | Visitas por etapa, conclusão do cadastro, seis perguntas, resultados da consulta de CEP, análise e seleção. |
+| Leads | Busca, período, tipo de sessão, exportação CSV, histórico por página e pedido vinculado. As sessões acompanhadas usam identificadores anônimos. |
+| Público | Agrupamentos de exemplo por origem, posicionamento, cidade e aparelho, com exportação agregada. |
+| Vendas | Filtros, auditoria de valores por estado, exportação CSV, consulta e reconciliação de pedidos de teste. |
+| Gateways | Prioridade, ativação, diagnósticos simulados dos seis provedores, comparação e consulta por código de teste. |
+| Tracking | Matriz de eventos por integração, testes de Pixel e API, deduplicação e fila simulada. |
+| UTMfy e Pushcut | Cenários de PIX gerado e pago, venda manual de teste para UTMfy e histórico da fila. |
+| SMSMais | Diagnóstico de SMS, voz e entrega, lembretes individuais ou em lote e cancelamento de lembrete quando o pedido encerra. |
+| Backredirects | Retornos do navegador registrados por página e progresso por sessão, preservando a navegação normal. |
+| Clonadores | Diagnóstico da regra de origem com casos simulados e histórico por página. |
+
 ## Referências de implantação
 
 - [Funções Node.js na Vercel](https://vercel.com/docs/functions/runtimes/node-js)
