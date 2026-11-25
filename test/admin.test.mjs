@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { adminHandler } from '../server/admin.mjs';
 import { localAuth, passwordAuth } from '../server/auth.mjs';
 import { memoryStore, supabaseStore } from '../server/store.mjs';
-import { gateways } from '../server/fixtures.mjs';
+import { gateways, initialState } from '../server/fixtures.mjs';
+import { queueReminder, queueTest, status } from '../server/operations.mjs';
 import { csv } from '../server/reports.mjs';
 
 const origin = 'http://127.0.0.1:4280';
@@ -161,6 +162,51 @@ test('journey orders use server prices and an idempotent request key', async () 
   const sales = await (await request('sales', { query: { q: order.id } })).json();
   assert.equal(sales.items.length, 1);
   assert.equal(sales.items[0].id, order.id);
+});
+
+test('configured navigation events are queued once without profile field values', async () => {
+  const { request, login } = fixture();
+  await login();
+  const config = await request('command', {
+    body: { type: 'tracking', key: 'Meta', value: ['PageView', 'ViewContent', 'Lead'], version: 0 },
+  });
+  assert.equal(config.status, 200);
+  for (const [page, completedProfile] of [
+    ['oferta', false], ['oferta', false], ['cadastro', false],
+    ['questionario', false], ['questionario', true], ['questionario', true],
+  ]) {
+    assert.equal((await request('traffic', {
+      body: { page, session: sessionId, completedProfile, name: 'ignored-fixture' },
+    })).status, 204);
+  }
+  const { state } = await (await request('view', { query: { section: 'queue' } })).json();
+  assert.deepEqual(state.queue.map(job => [job.event, job.channel, job.detail]), [
+    ['Lead', 'Meta', 'Cadastro concluído'],
+    ['PageView', 'Meta', 'questionario'],
+    ['PageView', 'Meta', 'cadastro'],
+    ['ViewContent', 'Meta', 'oferta'],
+    ['PageView', 'Meta', 'oferta'],
+  ]);
+  assert.doesNotMatch(JSON.stringify(state.queue), /ignored-fixture/);
+});
+
+test('full test queues retain pending jobs and keep old reminders deduplicated', () => {
+  const state = initialState();
+  const at = '2026-11-25T00:00:00.000Z';
+  state.orders.push({ id: 'old-order', status: status.pending });
+  state.queue = Array.from({ length: 299 }, (_, index) => ({
+    id: String(index), status: 'Aguardando teste',
+  }));
+  state.queue.push({
+    id: 'old-order/SMSMais/Remarketing', event: 'Remarketing',
+    detail: 'old-order', status: 'Processado no teste', createdAt: at,
+  });
+  queueTest(state, 'Meta', at);
+  assert.equal(state.queue.length, 300);
+  assert.equal(state.queue.at(-1).id, '298');
+  assert.equal(state.orders[0].reminderQueuedAt, at);
+  queueReminder(state, 'old-order', at);
+  assert.throws(() => queueTest(state, 'Meta', at), { status: 409 });
 });
 
 test('the private journey catalog reflects prices and availability, with explicit acceptance after price changes', async () => {

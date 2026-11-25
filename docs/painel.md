@@ -14,6 +14,8 @@ Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente
 
 **Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas por etapa** mostra a etapa mais avançada registrada para cada sessão no período selecionado.
 
+Os eventos configurados no painel entram na fila local durante a jornada acompanhada. `PageView` registra cada página uma vez por sessão e dia, `ViewContent` registra a abertura da oferta e `Lead` é enfileirado uma vez por sessão após o envio válido do formulário. A fila preserva os itens pendentes e mantém até 300 registros.
+
 ## Publicar o painel autenticado
 
 1. Crie um projeto Supabase para esta campanha e aplique as migrações em `supabase/migrations` em ordem de nome.

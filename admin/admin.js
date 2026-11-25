@@ -196,8 +196,8 @@ function pendingRemarketing() {
   const reminders = new Set(state.queue.filter(job => job.event === 'Remarketing').map(job => job.detail));
   const rows = state.orders.filter(order => order.status === orderStatuses[1]).map(order => [
     escape(order.id), escape(order.gateway), money(order.total),
-    `<button class="button secondary" type="button" data-reminder="${escape(order.id)}"${reminders.has(order.id) ? ' disabled' : ''}>
-      ${reminders.has(order.id) ? 'Lembrete registrado' : 'Enfileirar lembrete de teste'}</button>`,
+    `<button class="button secondary" type="button" data-reminder="${escape(order.id)}"${(order.reminderQueuedAt || reminders.has(order.id)) ? ' disabled' : ''}>
+      ${(order.reminderQueuedAt || reminders.has(order.id)) ? 'Lembrete registrado' : 'Enfileirar lembrete de teste'}</button>`,
   ]);
   return panel('Pedidos da jornada com PIX pendente', table(['Pedido', 'Gateway', 'Valor', 'Ação'], rows), 'Simulação');
 }

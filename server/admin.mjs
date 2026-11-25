@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { channels, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports } from './reports.mjs';
 import { HttpError } from './errors.mjs';
-import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueReminder, queueTest, reconcileOrder, uuid } from './operations.mjs';
+import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueTest, reconcileOrder, uuid } from './operations.mjs';
 
 function json(data, status = 200, headers = {}) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
@@ -148,6 +148,18 @@ async function saveOperation(store, state, result, operator, at) {
   return entry;
 }
 
+async function recordDemoNavigation(store, event, at) {
+  const { page, session, day } = event;
+  await store.recordTraffic({ page, session, day });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const state = await store.read();
+    if (!queueNavigationEvents(state, event, at)) return;
+    const previous = state.version++;
+    if (await store.save(previous, state)) return;
+  }
+  throw new HttpError(409, 'A fila mudou. Reabra a página para tentar registrar os eventos de teste.');
+}
+
 export function adminHandler({ auth, store, now = Date.now }) {
   return async request => {
     try {
@@ -167,11 +179,11 @@ export function adminHandler({ auth, store, now = Date.now }) {
       const operator = await auth.verify(request);
       const at = new Date(now()).toISOString();
       if (request.method === 'POST' && route === 'traffic') {
-        const { page, session } = await body(request);
+        const { page, session, completedProfile } = await body(request);
         if (!trackedPages.includes(page) || typeof session !== 'string' || !uuid.test(session)) {
           throw new HttpError(400, 'Evento de teste inválido.');
         }
-        await store.recordTraffic({ page, session, day: at.slice(0, 10) });
+        await recordDemoNavigation(store, { page, session, day: at.slice(0, 10), completedProfile }, at);
         return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
       }
       if (request.method === 'POST' && route === 'demo-order') {

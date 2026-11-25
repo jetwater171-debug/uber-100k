@@ -53,16 +53,32 @@ export function createDemoOrder(state, { session, requestId, items, quotedTotal 
 
 function enqueue(state, { id, channel, event, detail, at }) {
   if (state.queue.some(job => job.id === id)) return;
-  if (state.queue.length >= 300) throw new HttpError(409, 'A fila atingiu o limite de registros de teste.');
+  if (state.queue.length >= 300) {
+    const oldestClosed = state.queue.findLastIndex(job => job.status !== 'Aguardando teste');
+    if (oldestClosed === -1) throw new HttpError(409, 'Processe os registros pendentes para liberar espaço na fila de teste.');
+    const [retired] = state.queue.splice(oldestClosed, 1);
+    if (retired.event === 'Remarketing') {
+      const order = state.orders.find(entry => entry.id === retired.detail);
+      if (order) order.reminderQueuedAt ||= retired.createdAt;
+    }
+  }
   state.queue.unshift({ id, channel, event, detail, status: 'Aguardando teste', attempts: 0, createdAt: at });
 }
 
-function orderEvent(state, order, event, at) {
+function configuredEvent(state, key, event, detail, at) {
   for (const [channel, configured] of Object.entries(state.settings.tracking)) {
     if (configured.includes(event)) enqueue(state, {
-      id: `${order.id}/${channel}/${event}`, channel, event, detail: order.id, at,
+      id: `${key}/${channel}/${event}`, channel, event, detail, at,
     });
   }
+}
+
+export function queueNavigationEvents(state, { page, session, day, completedProfile }, at) {
+  const recent = state.queue[0];
+  configuredEvent(state, `${session}/${page}/${day}`, 'PageView', page, at);
+  if (page === 'oferta') configuredEvent(state, `${session}/${day}`, 'ViewContent', page, at);
+  if (page === 'questionario' && completedProfile === true) configuredEvent(state, session, 'Lead', 'Cadastro concluído', at);
+  return state.queue[0] !== recent;
 }
 
 function findOrder(state, id) {
@@ -85,7 +101,7 @@ export function paymentForOrder(state, id, preferred, at) {
   order.gateway = gateway.name;
   order.status = status.pending;
   order.payment = { code: `SIMULACAO-${randomUUID()}`, createdAt: at };
-  orderEvent(state, order, 'InitiateCheckout', at);
+  configuredEvent(state, order.id, 'InitiateCheckout', order.id, at);
   return { title: 'PIX de teste gerado', detail: order.gateway, code: order.payment.code, status: 'Simulado · sem cobrança' };
 }
 
@@ -102,7 +118,7 @@ export function reconcileOrder(state, id, outcome, at) {
     reminder.status = 'Cancelado no teste';
     reminder.processedAt = at;
   }
-  if (next === status.paid) orderEvent(state, order, 'Purchase', at);
+  if (next === status.paid) configuredEvent(state, order.id, 'Purchase', order.id, at);
   return { title: 'Pedido de teste reconciliado', detail: order.id, status: next };
 }
 
@@ -114,9 +130,12 @@ export function queueTest(state, channel, at) {
 export function queueReminder(state, id, at) {
   const order = findOrder(state, id);
   if (order.status !== status.pending) throw new HttpError(409, 'Somente pedidos de teste pendentes entram no remarketing.');
-  enqueue(state, {
-    id: `${id}/SMSMais/Remarketing`, channel: 'SMSMais', event: 'Remarketing', detail: id, at,
-  });
+  if (!order.reminderQueuedAt) {
+    enqueue(state, {
+      id: `${id}/SMSMais/Remarketing`, channel: 'SMSMais', event: 'Remarketing', detail: id, at,
+    });
+    order.reminderQueuedAt = at;
+  }
   return { title: 'Lembrete de teste registrado', detail: id, status: 'Simulação' };
 }
 

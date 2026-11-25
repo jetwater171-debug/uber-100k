@@ -47,10 +47,11 @@
     return data;
   };
   window.campaignDemo = Object.freeze({ catalog, createOrder });
+  const completedProfile = page === 'questionario' && campaignFlow.read().profileComplete === true;
   fetch('/api/admin?route=traffic', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ page, session: session.id }),
+    body: JSON.stringify({ page, session: session.id, completedProfile }),
     keepalive: true,
   }).catch(() => {});
 })();
