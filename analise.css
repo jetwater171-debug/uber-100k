@@ -263,52 +263,15 @@
   line-height: 1.15;
 }
 
-.approved-header-start {
-  display: flex;
-  grid-column: 1;
-  align-items: center;
-  gap: clamp(3px, 1.25cqw, 7px);
-  justify-self: start;
-}
-
-.approved-back,
-.approved-menu summary {
-  display: grid;
-  place-items: center;
-  width: clamp(26px, 7cqw, 42px);
-  min-height: 44px;
-  color: #fff;
-}
-
-.approved-back .arrow { position: relative; inset: auto; transform: rotate(180deg); }
-.approved-back[hidden] { display: none; }
-.approved-menu { position: relative; grid-column: 3; justify-self: end; }
-.approved-menu summary { list-style: none; cursor: pointer; }
-.approved-menu summary::-webkit-details-marker { display: none; }
-.approved-menu summary span { width: 4px; aspect-ratio: 1; border-radius: 50%; background: currentColor; box-shadow: -7px 0, 7px 0; }
-.approved-menu nav {
-  position: absolute;
-  z-index: 1;
-  inset-block-start: calc(100% + 4px);
-  inset-inline-end: 0;
-  display: grid;
-  width: max-content;
-  border: 1px solid #dfdfdf;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 6px 20px #0002;
-}
-.approved-menu nav a { padding: 12px 14px; color: #111; font-size: 14px; text-decoration: none; }
-.approved-menu nav a + a { border-top: 1px solid #ececec; }
-
 .approved-page {
   --approved-radius: clamp(11px, 2.9cqw, 17px);
+  --offers-gutter: max(10px, 2.35cqw);
   display: grid;
   flex: 1;
   min-width: 0;
   align-content: safe center;
   gap: clamp(9px, 2.3cqw, 13px);
-  padding: clamp(10px, 3.2cqw, 18px) max(10px, 2.35cqw) var(--page-bottom);
+  padding: clamp(10px, 3.2cqw, 18px) var(--offers-gutter) var(--page-bottom);
   animation: review-reveal 430ms ease-out both;
 }
 
@@ -461,11 +424,11 @@
 
 .approved-card {
   display: grid;
-  grid-template-columns: 36% minmax(0, 1fr) auto;
+  grid-template-columns: 37% minmax(0, 1fr) auto;
   align-items: center;
   gap: clamp(6px, 2.15cqw, 12px);
   width: 100%;
-  min-height: clamp(75px, 19.9cqw, 110px);
+  min-height: clamp(114px, 25.4cqw, 140px);
   padding: 0 clamp(8px, 2.9cqw, 16px) 0 0;
   border: 1px solid #e6e7e9;
   border-radius: var(--approved-radius);
@@ -476,7 +439,10 @@
   transition: background-color 160ms ease, border-color 160ms ease, transform 140ms ease;
 }
 
-.approved-card-required { min-height: clamp(90px, 23.15cqw, 128px); cursor: default; }
+.approved-card-required {
+  min-height: clamp(114px, 27.5cqw, 152px);
+  cursor: default;
+}
 .approved-card:not(.approved-card-required):active { transform: scale(.985); }
 @media (hover: hover) { .approved-card:not(.approved-card-required):hover { border-color: #a6b0bd; } }
 .approved-card:has(.approved-option:checked) {
@@ -487,11 +453,28 @@
 .approved-card:has(.approved-option:focus-visible) { outline: 2px solid #1769d6; outline-offset: 2px; }
 
 .approved-thumb {
-  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   align-self: stretch;
-  margin-block: clamp(4px, 2.1cqw, 12px);
+  gap: 2px;
+  margin-block: clamp(4px, 1cqw, 6px);
+  padding-inline: clamp(4px, 1.1cqw, 6px);
   border-inline-end: 1px solid #d2d5da;
 }
+
+.approved-discount {
+  justify-self: start;
+  padding: 2px clamp(4px, 1cqw, 6px);
+  border-radius: 5px;
+  background: #d9efe2;
+  color: #125834;
+  font-size: clamp(9px, 1.95cqw, 11px);
+  font-weight: 710;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.approved-photo-frame { position: relative; overflow: hidden; }
 
 .approved-photo {
   position: absolute;
@@ -502,7 +485,8 @@
   object-fit: contain;
 }
 
-.approved-thumb-camera .approved-photo { transform: scale(1.24); }
+.approved-thumb-camera .approved-photo { transform: scale(1.17); }
+.approved-thumb-tablet .approved-photo { transform: scale(1.06); }
 
 .approved-details {
   display: grid;
@@ -539,11 +523,21 @@
   white-space: nowrap;
 }
 
+.approved-original-price {
+  color: #373a3f;
+  font-size: clamp(12px, 3.45cqw, 19px);
+  font-weight: 620;
+  letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+.approved-original-price del { text-decoration-color: #606369; text-decoration-thickness: 1px; }
+
 .approved-price {
   padding: clamp(3px, .75cqw, 4px) clamp(6px, 2.65cqw, 15px);
   border-radius: clamp(6px, 2.2cqw, 12px);
-  background: #000;
-  color: #fff;
+  background: #e0f3e7;
+  color: #0d5832;
   font-size: clamp(12px, 3.6cqw, 20px);
   font-weight: 750;
 }
@@ -593,6 +587,8 @@
   transform: translateY(-12%) rotate(45deg);
   content: '';
 }
+
+.approved-footer { display: contents; }
 
 .approved-summary {
   display: grid;
@@ -698,6 +694,7 @@
   font-size: 14px;
 }
 .approved-dialog-items strong, .approved-dialog-total strong { white-space: nowrap; }
+.approved-dialog-items strong { color: #0d5832; }
 .approved-dialog h2 { font-size: 23px; }
 .approved-dialog-note { margin-block: 9px 13px; color: #525358; font-size: 13px; }
 .approved-dialog .primary-action { width: 100%; min-height: 44px; font-size: 16px; }
@@ -706,8 +703,7 @@
   .approved-page { gap: 5px; padding-top: 6px; }
   .approved-intro p { font-size: 12px; }
   .approved-list { gap: 6px; }
-  .approved-card { grid-template-columns: 33% minmax(0, 1fr) auto; gap: 6px; min-height: clamp(63px, 17cqw, 84px); padding-inline-end: 8px; }
-  .approved-card-required { min-height: clamp(74px, 20.5cqw, 95px); }
+  .approved-card { gap: 6px; padding-inline-end: 8px; }
   .approved-banner { min-height: 45px; padding-block: 5px; }
   .approved-thumb { margin-block: 4px; }
   .approved-details { gap: 2px; padding-block: 3px; }
@@ -719,8 +715,6 @@
 @media (min-width: 741px) and (min-height: 481px) and (max-height: 980px) {
   .approved-page { gap: 9px; padding-top: 12px; }
   .approved-list { gap: 8px; }
-  .approved-card { min-height: clamp(78px, 11.4dvh, 110px); }
-  .approved-card-required { min-height: clamp(88px, 13.2dvh, 128px); }
 }
 
 @media (orientation: landscape) and (min-width: 540px) and (max-height: 480px) {
@@ -736,8 +730,8 @@
   .approved-banner p { margin-top: 2px; font-size: 12px; }
   .approved-gift { width: 24px; }
   .approved-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .approved-card { grid-template-columns: 34% minmax(0, 1fr) auto; gap: 6px; min-height: 67px; padding-inline-end: 7px; }
-  .approved-card-required { min-height: 79px; }
+  .approved-card { gap: 6px; min-height: 95px; padding-inline-end: 7px; }
+  .approved-thumb-camera .approved-photo { transform: scale(1.06); }
   .approved-details strong { font-size: 14px; }
   .approved-description, .approved-prices { font-size: 11px; }
   .approved-price { padding: 3px 6px; font-size: 12px; }
@@ -807,6 +801,53 @@
   .review-intro h1 { font-size: 20px; }
   .review-intro p { font-size: 12px; }
   .review-note { padding-block: 4px; }
+}
+
+@media (orientation: portrait) and (max-width: 600px) {
+  .review-screen main.layout { max-width: none; }
+
+  .approved-page {
+    --offers-gutter: var(--phone-gutter);
+    grid-template-rows: auto auto auto minmax(min-content, 1fr) auto;
+    align-content: start;
+    gap: clamp(8px, 1.6dvh, 13px);
+    padding-top: var(--phone-start);
+  }
+
+  .approved-progress, .approved-intro { padding-inline: 0; }
+  .approved-track, .approved-track::before { height: clamp(5px, 1.7cqw, 9px); }
+  .approved-list { align-content: start; }
+  .approved-card { gap: clamp(6px, 2.05cqw, 11px); }
+  .approved-details strong { font-size: clamp(14px, 3.65cqw, 19px); }
+  .approved-description { font-size: clamp(11px, 3cqw, 15px); }
+
+  .approved-summary { padding-block: 6px; }
+  .approved-action.primary-action { min-height: var(--phone-action-height); }
+}
+
+@media (orientation: portrait) and (max-width: 600px), (orientation: landscape) and (min-width: 540px) and (max-height: 480px) {
+  .review-screen:has(.approved-page:not([hidden])) {
+    min-height: 100dvh;
+    height: auto;
+  }
+
+  .approved-page { padding-bottom: 0; }
+
+  .approved-footer {
+    position: sticky;
+    z-index: 1;
+    inset-block-end: 0;
+    display: grid;
+    gap: 5px;
+    margin-inline: calc(-1 * var(--offers-gutter));
+    padding: 7px var(--offers-gutter) var(--page-bottom);
+    background: #fff;
+    box-shadow: 0 -3px 12px rgb(0 0 0 / 7%);
+  }
+}
+
+@media (orientation: landscape) and (min-width: 540px) and (max-height: 480px) {
+  .approved-footer { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

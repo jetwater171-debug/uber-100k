@@ -7,8 +7,6 @@ const reviewSimulation = document.getElementById('review-simulation');
 const reviewAnnouncement = document.getElementById('review-announcement');
 const reviewMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const approvedPage = document.getElementById('approved-page');
-const approvedBack = document.getElementById('approved-back');
-const approvedMenu = document.getElementById('approved-menu');
 const offerList = document.getElementById('ofertas');
 const approvedCount = document.getElementById('approved-count');
 const approvedTotal = document.getElementById('approved-total');
@@ -17,13 +15,21 @@ const selectionDialog = document.getElementById('selection-dialog');
 const selectionItems = document.getElementById('selection-items');
 const selectionTotal = document.getElementById('selection-total');
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const percent = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 });
+
+for (const card of offerList.querySelectorAll('.approved-card')) {
+  const original = Number(card.querySelector('.approved-original-price').value);
+  const current = Number(card.querySelector('.approved-price').value);
+  const discount = percent.format((original - current) / original);
+  card.querySelector('.approved-discount').textContent = `${discount} OFF`;
+}
 
 function selectedOffers() {
   return Array.from(offerList.querySelectorAll('.approved-option:checked'), option => {
     const card = option.closest('.approved-card');
     return {
       name: card.querySelector('strong').textContent,
-      cents: Number(card.querySelector('.approved-price').value),
+      cents: Number(card.querySelector('data.approved-price').value),
     };
   });
 }
@@ -51,8 +57,6 @@ approvedAction.addEventListener('click', () => {
   selectionTotal.textContent = approvedTotal.textContent;
   selectionDialog.showModal();
 });
-
-approvedMenu.querySelector('nav').addEventListener('click', () => { approvedMenu.open = false; });
 
 const checks = [
   {
@@ -138,10 +142,8 @@ async function runReview() {
 
   reviewPage.hidden = true;
   approvedPage.hidden = false;
-  approvedBack.hidden = false;
-  approvedMenu.hidden = false;
   syncSelection();
-  reviewAnnouncement.textContent = 'Perfil aprovado na simulação. Quatro ofertas demonstrativas disponíveis.';
+  reviewAnnouncement.textContent = 'Perfil aprovado na simulação. Confira os itens disponíveis para seleção.';
 }
 
 runReview();

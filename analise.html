@@ -5,31 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <title>Análise do perfil | Uber Driver</title>
-  <link rel="stylesheet" href="styles.css?v=41">
-  <link rel="stylesheet" href="analise.css?v=19">
+  <link rel="stylesheet" href="styles.css?v=44">
+  <link rel="stylesheet" href="analise.css?v=30">
   <script src="fluxo.js?v=1" defer></script>
-  <script src="analise.js?v=11" defer></script>
+  <script src="analise.js?v=16" defer></script>
 </head>
 <body class="review-screen">
   <header class="site-header">
     <div class="layout">
       <div class="header-content">
-        <div class="approved-header-start">
-          <a class="approved-back" id="approved-back" href="disponibilidade.html" aria-label="Voltar para disponibilidade" hidden>
-            <span class="arrow" aria-hidden="true"></span>
-          </a>
-          <span class="prototype-label">Protótipo</span>
-        </div>
+        <span class="prototype-label">Protótipo</span>
         <a class="wordmark" href="index.html" aria-label="Uber Driver — início">
           <img src="assets/uber-driver-wordmark.webp" alt="" width="2256" height="325">
         </a>
-        <details class="approved-menu" id="approved-menu" hidden>
-          <summary aria-label="Mais opções"><span aria-hidden="true"></span></summary>
-          <nav aria-label="Opções da tela de ofertas">
-            <a href="index.html">Voltar ao início</a>
-            <a href="#approved-selection">Ver minha seleção</a>
-          </nav>
-        </details>
       </div>
     </div>
   </header>
@@ -122,13 +110,18 @@
       <ul class="approved-list" id="ofertas" aria-labelledby="offers-heading" role="list">
         <li>
           <label class="approved-card approved-card-required">
-            <input class="approved-option sr-only" type="checkbox" checked disabled aria-labelledby="offer-camera" aria-describedby="price-camera offer-required">
-            <span class="approved-thumb approved-thumb-camera"><img class="approved-photo" src="assets/oferta-camera.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <input class="approved-option sr-only" type="checkbox" checked disabled aria-labelledby="offer-camera" aria-describedby="price-camera discount-camera offer-required">
+            <span class="approved-thumb approved-thumb-camera">
+              <span class="approved-discount" id="discount-camera"></span>
+              <span class="approved-photo-frame">
+                <img class="approved-photo" src="assets/oferta-camera.webp?v=2" alt="" width="1254" height="1254" decoding="async">
+              </span>
+            </span>
             <span class="approved-details">
               <strong id="offer-camera">Câmera veicular Uber</strong>
               <span class="approved-description">Duas lentes para gravar a rua e a cabine.</span>
               <span class="approved-prices">
-                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;349,90</del></span>
+                <data class="approved-original-price" value="34990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;349,90</del></data>
                 <data class="approved-price" id="price-camera" value="3990"><span class="sr-only">Preço da oferta </span>R$&nbsp;39,90</data>
               </span>
               <span class="approved-required" id="offer-required"><span class="approved-shield" aria-hidden="true"></span>Item obrigatório da promoção</span>
@@ -138,13 +131,18 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-suporte" aria-describedby="price-suporte">
-            <span class="approved-thumb"><img class="approved-photo" src="assets/oferta-suporte.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-suporte" aria-describedby="price-suporte discount-suporte">
+            <span class="approved-thumb">
+              <span class="approved-discount" id="discount-suporte"></span>
+              <span class="approved-photo-frame">
+                <img class="approved-photo" src="assets/oferta-suporte.webp?v=2" alt="" width="1254" height="1254" decoding="async">
+              </span>
+            </span>
             <span class="approved-details">
               <strong id="offer-suporte">Suporte + Carregador Turbo</strong>
               <span class="approved-description">Fixação segura e carregamento rápido.</span>
               <span class="approved-prices">
-                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;149,90</del></span>
+                <data class="approved-original-price" value="14990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;149,90</del></data>
                 <data class="approved-price" id="price-suporte" value="2990"><span class="sr-only">Preço da oferta </span>R$&nbsp;29,90</data>
               </span>
             </span>
@@ -153,13 +151,18 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-compressor" aria-describedby="price-compressor">
-            <span class="approved-thumb"><img class="approved-photo" src="assets/oferta-compressor.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-compressor" aria-describedby="price-compressor discount-compressor">
+            <span class="approved-thumb">
+              <span class="approved-discount" id="discount-compressor"></span>
+              <span class="approved-photo-frame">
+                <img class="approved-photo" src="assets/oferta-compressor.webp?v=2" alt="" width="1254" height="1254" decoding="async">
+              </span>
+            </span>
             <span class="approved-details">
               <strong id="offer-compressor">Compressor Portátil 3 em 1</strong>
               <span class="approved-description">Compressor, macaco e partida de emergência.</span>
               <span class="approved-prices">
-                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;399,90</del></span>
+                <data class="approved-original-price" value="39990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;399,90</del></data>
                 <data class="approved-price" id="price-compressor" value="9990"><span class="sr-only">Preço da oferta </span>R$&nbsp;99,90</data>
               </span>
             </span>
@@ -168,14 +171,59 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-tablet" aria-describedby="price-tablet">
-            <span class="approved-thumb"><img class="approved-photo" src="assets/oferta-tablet.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-tablet" aria-describedby="price-tablet discount-tablet">
+            <span class="approved-thumb approved-thumb-tablet">
+              <span class="approved-discount" id="discount-tablet"></span>
+              <span class="approved-photo-frame">
+                <img class="approved-photo" src="assets/oferta-tablet.webp?v=2" alt="" width="1254" height="1254" decoding="async">
+              </span>
+            </span>
             <span class="approved-details">
               <strong id="offer-tablet">Tablet Uber</strong>
               <span class="approved-description">Mais navegação, corridas e praticidade no seu dia a dia.</span>
               <span class="approved-prices">
-                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;599,90</del></span>
+                <data class="approved-original-price" value="59990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;599,90</del></data>
                 <data class="approved-price" id="price-tablet" value="14990"><span class="sr-only">Preço da oferta </span>R$&nbsp;149,90</data>
+              </span>
+            </span>
+            <span class="approved-box" aria-hidden="true"></span>
+          </label>
+        </li>
+        <li>
+          <label class="approved-card">
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-capa-bancos" aria-describedby="price-capa-bancos discount-capa-bancos">
+            <span class="approved-thumb">
+              <span class="approved-discount" id="discount-capa-bancos"></span>
+              <span class="approved-photo-frame">
+                <img class="approved-photo" src="assets/oferta-capa-bancos.webp?v=2" alt="" width="1254" height="1254" decoding="async">
+              </span>
+            </span>
+            <span class="approved-details">
+              <strong id="offer-capa-bancos">Capa de bancos Uber</strong>
+              <span class="approved-description">Super-resistente e impermeável, protege os bancos no dia a dia.</span>
+              <span class="approved-prices">
+                <data class="approved-original-price" value="8000"><span class="sr-only">Preço anterior </span><del>R$&nbsp;80,00</del></data>
+                <data class="approved-price" id="price-capa-bancos" value="990"><span class="sr-only">Preço da oferta </span>R$&nbsp;9,90</data>
+              </span>
+            </span>
+            <span class="approved-box" aria-hidden="true"></span>
+          </label>
+        </li>
+        <li>
+          <label class="approved-card">
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-powerbank" aria-describedby="price-powerbank discount-powerbank">
+            <span class="approved-thumb">
+              <span class="approved-discount" id="discount-powerbank"></span>
+              <span class="approved-photo-frame">
+                <img class="approved-photo" src="assets/oferta-powerbank.webp" alt="" width="1254" height="1254" decoding="async">
+              </span>
+            </span>
+            <span class="approved-details">
+              <strong id="offer-powerbank">Powerbank Uber</strong>
+              <span class="approved-description">Carregue seu celular por cabo ou indução.</span>
+              <span class="approved-prices">
+                <data class="approved-original-price" value="12990"><span class="sr-only">Preço anterior </span><del>R$&nbsp;129,90</del></data>
+                <data class="approved-price" id="price-powerbank" value="3590"><span class="sr-only">Preço da oferta </span>R$&nbsp;35,90</data>
               </span>
             </span>
             <span class="approved-box" aria-hidden="true"></span>
@@ -183,18 +231,20 @@
         </li>
       </ul>
 
-      <div class="approved-summary" id="approved-selection" role="status">
-        <span class="approved-cart" aria-hidden="true"><span></span></span>
-        <div class="approved-summary-label">
-          <strong id="approved-count">1 item selecionado</strong>
-          <span>Total da promoção</span>
+      <div class="approved-footer">
+        <div class="approved-summary" id="approved-selection" role="status">
+          <span class="approved-cart" aria-hidden="true"><span></span></span>
+          <div class="approved-summary-label">
+            <strong id="approved-count">1 item selecionado</strong>
+            <span>Total da promoção</span>
+          </div>
+          <strong class="approved-total" id="approved-total">R$&nbsp;39,90</strong>
         </div>
-        <strong class="approved-total" id="approved-total">R$&nbsp;39,90</strong>
+        <button class="primary-action approved-action" id="approved-action" type="button" aria-haspopup="dialog">
+          <span>Continuar com a seleção</span>
+          <span class="arrow" aria-hidden="true"></span>
+        </button>
       </div>
-      <button class="primary-action approved-action" id="approved-action" type="button" aria-haspopup="dialog">
-        <span>Continuar com a seleção</span>
-        <span class="arrow" aria-hidden="true"></span>
-      </button>
     </section>
   </main>
   <dialog class="approved-dialog" id="selection-dialog" aria-labelledby="selection-dialog-title">
