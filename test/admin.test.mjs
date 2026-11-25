@@ -317,13 +317,14 @@ test('view requests return one consistent snapshot with section-specific records
   assert.equal((await request('view', { query: { section: 'outside' } })).status, 404);
 });
 
-test('Supabase store sends compare-and-swap and deduplicated insert requests', async () => {
+test('Supabase store checks login limits and sends compare-and-swap and deduplicated insert requests', async () => {
   const requests = [];
   const store = supabaseStore({
     url: 'https://fake-db.example',
     secret: 'sb_secret_fake',
     fetch: async (url, options) => {
       requests.push({ url, options });
+      if (url.pathname === '/rest/v1/rpc/campaign_allow_admin_login') return Response.json(true);
       return options.method === 'POST' ? new Response(null, { status: 201 }) : Response.json([{ revision: 1 }]);
     },
   });
@@ -332,4 +333,9 @@ test('Supabase store sends compare-and-swap and deduplicated insert requests', a
   assert.equal(requests[0].url.searchParams.get('revision'), 'eq.0');
   assert.equal(requests[1].url.searchParams.get('on_conflict'), 'session,page,day');
   assert.equal(requests[1].options.headers.Prefer, 'resolution=ignore-duplicates,return=minimal');
+  const bucket = 'a'.repeat(64);
+  assert.equal(await store.allowLoginAttempt(bucket), true);
+  assert.equal(requests[2].url.pathname, '/rest/v1/rpc/campaign_allow_admin_login');
+  assert.equal(requests[2].options.method, 'POST');
+  assert.deepEqual(JSON.parse(requests[2].options.body), { p_bucket: bucket });
 });

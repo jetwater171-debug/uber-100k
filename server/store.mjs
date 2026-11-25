@@ -20,12 +20,6 @@ export function memoryStore() {
     async readTraffic(since) {
       return [...traffic.values()].filter(event => event.day >= since);
     },
-    async allowLoginAttempt(bucket) {
-      return await request('', {
-        method: 'POST',
-        body: JSON.stringify({ p_bucket: bucket }),
-      }, new URL('/rest/v1/rpc/campaign_allow_admin_login', url)) === true;
-    },
   };
 }
 
@@ -75,6 +69,13 @@ export function supabaseStore({ url, secret, fetch }) {
     async readTraffic(since) {
       return request(`day=gte.${since}&select=page,session,day&order=day.desc&limit=1000`, {},
         new URL('/rest/v1/campaign_demo_traffic', url));
+    },
+    async allowLoginAttempt(bucket) {
+      const allowed = await request('', {
+        method: 'POST',
+        body: JSON.stringify({ p_bucket: bucket }),
+      }, new URL('/rest/v1/rpc/campaign_allow_admin_login', url));
+      return allowed === true;
     },
     async replaceAdminSession(session) {
       await request('on_conflict=operator_id', {
