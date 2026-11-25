@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Painel da campanha</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script type="module" src="/admin/admin.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#overview">
+        <span class="brand-icon" aria-hidden="true">◎</span>
+        <span>Painel da campanha<small>Administração</small></span>
+      </a>
+      <nav id="navigation" aria-label="Seções do painel" hidden></nav>
+      <div class="sidebar-footer"><span></span> Ambiente de protótipo</div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <p class="path">Área administrativa</p>
+        <div id="operator" class="operator" hidden><span id="operator-name"></span><button id="logout" type="button" class="button secondary">Sair</button></div>
+      </header>
+      <div class="content">
+        <section id="login" class="login panel" aria-labelledby="login-title">
+          <p class="eyebrow">Painel da campanha</p>
+          <h1 id="login-title">Acesso administrativo</h1>
+          <p class="muted">Entre para consultar a operação do protótipo.</p>
+          <form id="login-form">
+            <div id="credentials">
+              <label>E-mail <input name="email" type="email" autocomplete="username" required></label>
+              <label>Senha <input name="password" type="password" autocomplete="current-password" required></label>
+            </div>
+            <button class="button primary" type="submit" id="login-action">Entrar</button>
+          </form>
+        </section>
+        <p class="feedback" id="feedback" role="status" hidden></p>
+        <section id="view" hidden></section>
+      </div>
+    </main>
+  </div>
+  <dialog id="details" aria-labelledby="details-title">
+    <h2 id="details-title"></h2>
+    <div id="details-content"></div>
+    <form method="dialog"><button class="button secondary" autofocus>Fechar</button></form>
+  </dialog>
+</body>
+</html>
