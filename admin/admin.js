@@ -118,7 +118,8 @@ function dashboard(data) {
     panel('Visitas por dia', bars(data.daily.slice(-7).map(item => ({ name: item.day.slice(5).split('-').reverse().join('/'), count: item.visits })))) +
     '</div>' + '<div class="stack dashboard-controls">' + panel('Jornadas registradas neste painel',
       '<div class="cards">' + metric('Pedidos de jornada', integer.format(counts.testOrders)) +
-      metric('Confirmados em teste', integer.format(counts.testPaid)) + '</div>') + panel('Controles da demonstração', [
+      metric('Confirmados em teste', integer.format(counts.testPaid)) +
+      metric('Valor confirmado em teste', money(counts.testRevenue)) + '</div>') + panel('Controles da demonstração', [
       ['compareGateways', 'Comparar gateways'], ['offerExtras', 'Exibir acessórios no catálogo de teste'],
     ].map(([id, label]) => `<label class="control-row checkbox"><span>${label}</span>
       <input type="checkbox" data-change="feature" data-key="${id}"${checked(state.settings[id])}></label>`).join('')) + '</div>';
@@ -159,11 +160,11 @@ function gatewayView(data) {
         <button type="button" title="Subir prioridade" aria-label="Subir prioridade de ${escape(name)}" class="button secondary" data-priority="-1" data-key="${escape(name)}"${index === 0 ? ' disabled' : ''}>↑</button>
         <button type="button" title="Descer prioridade" aria-label="Descer prioridade de ${escape(name)}" class="button secondary" data-priority="1" data-key="${escape(name)}"${index === state.settings.gateways.length - 1 ? ' disabled' : ''}>↓</button>
         <button type="button" class="button secondary" data-pix="${escape(name)}"${enabled ? '' : ' disabled'}>Testar PIX</button></div>`]);
-  const gatewaySales = data.gatewaySales.map(row =>
+  const gatewaySales = data.journeyGatewaySales.map(row =>
     [escape(row.name), integer.format(row.orders), integer.format(row.paid), money(row.revenue)]);
   return title('Gateways PIX', 'Configure a ordem e gere comprovantes de teste dos seis gateways.') + range() + '</div><div class="stack">' +
     panel('Prioridade dos gateways', table(['Ordem', 'Gateway', 'Modo de teste', 'Ações'], rows), 'Simulação') +
-    (state.settings.compareGateways ? panel('Desempenho no período', table(['Gateway', 'Pedidos', 'Pagos no teste', 'Receita simulada'], gatewaySales)) : '') +
+    (state.settings.compareGateways ? panel('Desempenho das jornadas de teste', table(['Gateway', 'Pedidos com PIX', 'Confirmados', 'Valor confirmado em teste'], gatewaySales)) : '') +
     '</div>';
 }
 
@@ -219,7 +220,8 @@ async function render() {
         panel('Tracking da jornada de teste', '<p class="empty">Abra o site abaixo e percorra as etapas. A contagem acompanha esta jornada de teste.</p>' +
           '<a href="/?analytics=demo" target="_blank" rel="noopener" class="button primary">Abrir jornada com tracking</a> ' +
           '<button type="button" id="refresh-tracking" class="button secondary">Atualizar</button>' +
-          bars(traffic.rows.map(row => ({ name: trackedLabels[row.page], count: row.count }))), traffic.limit ? 'Últimos 1.000 eventos' : 'Visitas de teste') +
+          bars(traffic.rows.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
+          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`) +
         panel('Etapas percorridas', bars(data.funnel), 'Amostra') + '</div>',
       leads: () => listView('leads', data),
       sales: () => listView('sales', data),
@@ -235,8 +237,9 @@ async function render() {
         pendingRemarketing() + trackingCards(['SMSMais']) +
         panel('Histórico de testes', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' || entry.title === 'Lembrete de teste registrado'))) + '</div>',
       queue: queueView,
-      navigation: () => title('Saídas por etapa', 'Consulte o abandono observado nas jornadas de exemplo.') + range() + '</div>' +
-        panel('Principais saídas', bars(data.funnel.map(row => ({ name: row.name, count: row.departures })))),
+      navigation: () => title('Saídas por etapa', 'Veja até onde as sessões acompanhadas avançaram no período.') + range() + '</div>' +
+        panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
+          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`),
       security: () => title('Auditoria e segurança', 'Histórico das mudanças feitas por operadores neste painel.') + '</div>' +
         panel('Atividade do painel', auditTable(state.audit)),
     };

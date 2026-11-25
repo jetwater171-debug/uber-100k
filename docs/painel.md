@@ -12,6 +12,8 @@ Em **Vendas → Ver pedido**, gere um PIX de teste em um gateway ativo e simule 
 
 Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente. A fila mantém um lembrete por pedido e cancela o lembrete pendente se o PIX encerrar antes do processamento. O histórico fica disponível na mesma seção e na auditoria.
 
+**Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas por etapa** mostra a etapa mais avançada registrada para cada sessão no período selecionado.
+
 ## Publicar o painel autenticado
 
 1. Crie um projeto Supabase para esta campanha e aplique as migrações em `supabase/migrations` em ordem de nome.

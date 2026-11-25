@@ -1,4 +1,5 @@
 import { demoData, gateways, stages } from './fixtures.mjs';
+import { status } from './operations.mjs';
 
 function counts(rows, field) {
   const totals = new Map();
@@ -16,8 +17,9 @@ export function reports(params, now = Date.now(), journeyOrders = []) {
   const cutoff = now - days * 86400000;
   const visits = sessions.filter(row => Date.parse(row.createdAt) > cutoff);
   const transactions = orders.filter(row => Date.parse(row.createdAt) > cutoff);
-  const paid = transactions.filter(order => order.status === 'Pago no teste');
+  const paid = transactions.filter(order => order.status === status.paid);
   const realTests = journeyOrders.filter(order => Date.parse(order.createdAt) > cutoff);
+  const journeyPaid = realTests.filter(order => order.status === status.paid);
   const paidSessions = new Set(paid.map(order => order.sessionId));
   const paidAudience = visits.filter(session => paidSessions.has(session.id));
   const steps = stages.map(name => ({ name, count: visits.filter(row => row.steps.includes(name)).length }));
@@ -49,7 +51,8 @@ export function reports(params, now = Date.now(), journeyOrders = []) {
       paid: paid.length,
       revenue: paid.reduce((total, order) => total + order.total, 0),
       testOrders: realTests.length,
-      testPaid: realTests.filter(order => order.status === 'Pago no teste').length,
+      testPaid: journeyPaid.length,
+      testRevenue: journeyPaid.reduce((total, order) => total + order.total, 0),
     },
     daily,
     funnel,
@@ -60,9 +63,19 @@ export function reports(params, now = Date.now(), journeyOrders = []) {
     },
     gatewaySales: gateways.map(name => {
       const gatewayOrders = transactions.filter(row => row.gateway === name);
-      const confirmed = gatewayOrders.filter(row => row.status === 'Pago no teste');
+      const confirmed = gatewayOrders.filter(row => row.status === status.paid);
       return { name, orders: gatewayOrders.length, paid: confirmed.length,
         revenue: confirmed.reduce((sum, row) => sum + row.total, 0) };
+    }),
+    journeyGatewaySales: gateways.map(name => {
+      const submitted = realTests.filter(order => order.gateway === name);
+      const confirmed = journeyPaid.filter(order => order.gateway === name);
+      return {
+        name,
+        orders: submitted.length,
+        paid: confirmed.length,
+        revenue: confirmed.reduce((total, order) => total + order.total, 0),
+      };
     }),
     leads: visits.filter(row => row.steps.includes('Cadastro')),
     orders: [...realTests, ...transactions],

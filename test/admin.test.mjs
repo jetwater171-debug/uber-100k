@@ -128,13 +128,20 @@ test('tracking counts actual demo navigation once per day, with a private bounde
   const { request, login } = fixture();
   assert.equal((await request('traffic', { body: { page: 'inicio', session: sessionId } })).status, 401);
   await login();
-  for (const page of ['inicio', 'inicio', 'cadastro']) {
+  for (const page of ['inicio', 'inicio', 'cadastro', 'inicio']) {
     assert.equal((await request('traffic', { body: { page, session: sessionId } })).status, 204);
   }
+  const secondSession = '015379c9-c724-4c57-9aa4-f32cdc3049cc';
+  assert.equal((await request('traffic', { body: { page: 'inicio', session: secondSession } })).status, 204);
   assert.equal((await request('traffic', { body: { page: 'fora-do-projeto', session: sessionId } })).status, 400);
   const { rows } = await (await request('traffic')).json();
-  assert.equal(rows.find(row => row.page === 'inicio').count, 1);
+  assert.equal(rows.find(row => row.page === 'inicio').count, 2);
   assert.equal(rows.find(row => row.page === 'cadastro').count, 1);
+  const { traffic } = await (await request('view', { query: { section: 'navigation' } })).json();
+  assert.equal(traffic.sessions, 2);
+  assert.deepEqual(traffic.furthestPages.filter(row => row.count), [
+    { page: 'inicio', count: 1 }, { page: 'cadastro', count: 1 },
+  ]);
 });
 
 test('journey orders use server prices and an idempotent request key', async () => {
@@ -206,6 +213,9 @@ test('PIX reconciliation records purchase once and processes pending jobs idempo
   const overview = await (await request('overview')).json();
   assert.equal(overview.counts.testOrders, 1);
   assert.equal(overview.counts.testPaid, 1);
+  assert.equal(overview.counts.testRevenue, 3990);
+  const gateway = overview.journeyGatewaySales.find(row => row.name === first.result.detail);
+  assert.deepEqual(gateway, { name: first.result.detail, orders: 1, paid: 1, revenue: 3990 });
 });
 
 test('a pending reminder is deduplicated and canceled after payment reconciliation', async () => {
