@@ -120,6 +120,7 @@ form.addEventListener('submit', event => {
   phone.setCustomValidity(validPhone ? '' : 'Confira se você incluiu o DDD e o número da linha.');
 
   if (form.reportValidity()) {
+    campaignFlow.save({ profileComplete: true });
     window.location.assign('questionario.html');
   }
 });

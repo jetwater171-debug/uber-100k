@@ -54,7 +54,7 @@ function renderQuestion() {
   title.textContent = question.title;
   hint.textContent = question.hint;
   step.textContent = `Pergunta ${currentIndex + 1} de ${questions.length}`;
-  progress.value = Math.round(42 + 24 * currentIndex / (questions.length - 1));
+  progress.value = Math.round(27 + 21 * currentIndex / (questions.length - 1));
   actionLabel.textContent = currentIndex === questions.length - 1 ? 'Continuar para o CEP' : 'Continuar';
 
   const options = question.options.map((text, index) => {
@@ -87,6 +87,7 @@ form.addEventListener('submit', event => {
   if (pendingQuestion) {
     window.location.hash = pendingQuestion.route;
   } else {
+    campaignFlow.save({ profileComplete: campaignFlow.read().profileComplete === true, answers: answers.size });
     window.location.assign('disponibilidade.html');
   }
 });

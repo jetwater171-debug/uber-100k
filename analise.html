@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Análise do perfil | Uber Driver</title>
+  <link rel="stylesheet" href="styles.css?v=41">
+  <link rel="stylesheet" href="analise.css?v=19">
+  <script src="fluxo.js?v=1" defer></script>
+  <script src="analise.js?v=11" defer></script>
+</head>
+<body class="review-screen">
+  <header class="site-header">
+    <div class="layout">
+      <div class="header-content">
+        <div class="approved-header-start">
+          <a class="approved-back" id="approved-back" href="disponibilidade.html" aria-label="Voltar para disponibilidade" hidden>
+            <span class="arrow" aria-hidden="true"></span>
+          </a>
+          <span class="prototype-label">Protótipo</span>
+        </div>
+        <a class="wordmark" href="index.html" aria-label="Uber Driver — início">
+          <img src="assets/uber-driver-wordmark.webp" alt="" width="2256" height="325">
+        </a>
+        <details class="approved-menu" id="approved-menu" hidden>
+          <summary aria-label="Mais opções"><span aria-hidden="true"></span></summary>
+          <nav aria-label="Opções da tela de ofertas">
+            <a href="index.html">Voltar ao início</a>
+            <a href="#approved-selection">Ver minha seleção</a>
+          </nav>
+        </details>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="review-page" aria-labelledby="review-title">
+      <div class="review-progress sr-only" id="review-progress" hidden>
+        <p class="step-label">Etapa 4 de 4</p>
+        <p class="review-count">Simulação</p>
+        <progress class="step-progress" id="review-meter" value="0" max="100" aria-label="Progresso da análise"></progress>
+      </div>
+
+      <div class="review-intro">
+        <h1 id="review-title" tabindex="-1">Estamos analisando seu perfil</h1>
+        <p id="review-description">Verificando sua elegibilidade para liberar suas ofertas.</p>
+      </div>
+
+      <div class="review-panel" id="review-panel" hidden>
+        <div class="review-visual" aria-hidden="true">
+          <div class="review-loading">
+            <span class="review-ring"></span>
+            <div>
+              <strong>Análise em andamento</strong>
+              <p>Isso pode levar alguns segundos.</p>
+            </div>
+          </div>
+          <div class="review-milestone review-milestone-approval">
+            <span class="review-milestone-icon"><span class="review-milestone-check"></span></span>
+            <strong>Perfil aprovado</strong>
+          </div>
+          <div class="review-milestone review-milestone-offers">
+            <span class="review-milestone-icon"><span class="review-milestone-ticket"></span></span>
+            <strong>Ofertas liberadas</strong>
+          </div>
+        </div>
+
+        <ul class="review-checks" role="list" aria-label="Verificações da análise">
+          <li class="review-row" data-phase="waiting">
+            <span class="review-indicator" aria-hidden="true"></span>
+            <strong>Conferindo sua região</strong>
+            <span class="review-state sr-only">Aguardando</span>
+          </li>
+          <li class="review-row" data-phase="waiting">
+            <span class="review-indicator" aria-hidden="true"></span>
+            <strong>Analisando sua rotina de corridas</strong>
+            <span class="review-state sr-only">Aguardando</span>
+          </li>
+          <li class="review-row" data-phase="waiting">
+            <span class="review-indicator" aria-hidden="true"></span>
+            <strong>Validando seu perfil para a promoção</strong>
+            <span class="review-state sr-only">Aguardando</span>
+          </li>
+          <li class="review-row" data-phase="waiting">
+            <span class="review-indicator" aria-hidden="true"></span>
+            <strong>Preparando suas ofertas exclusivas</strong>
+            <span class="review-state sr-only">Aguardando</span>
+          </li>
+        </ul>
+
+        <p class="review-note"><span class="review-info" aria-hidden="true">i</span><span>Quanto mais compatível o perfil, mais ofertas podem ser liberadas.</span></p>
+      </div>
+
+      <div class="review-actions">
+        <p class="review-simulation" id="review-simulation">Analisando seu perfil...</p>
+      </div>
+    </section>
+
+    <section class="approved-page" id="approved-page" aria-labelledby="approved-title" hidden>
+      <div class="approved-progress">
+        <p class="step-label">Etapa 4 de 4</p>
+        <div class="approved-track" aria-hidden="true"></div>
+      </div>
+
+      <div class="approved-intro">
+        <span class="approved-award" aria-hidden="true"></span>
+        <div>
+          <h1 id="approved-title">Perfil aprovado</h1>
+          <p>Você desbloqueou ofertas exclusivas como motorista parceiro da Uber.</p>
+        </div>
+      </div>
+
+      <div class="approved-banner">
+        <span class="approved-gift" aria-hidden="true"><span class="approved-gift-box"></span></span>
+        <div>
+          <h2 id="offers-heading">Selecione seus itens</h2>
+          <p>Escolha os produtos que deseja aproveitar.</p>
+        </div>
+      </div>
+
+      <ul class="approved-list" id="ofertas" aria-labelledby="offers-heading" role="list">
+        <li>
+          <label class="approved-card approved-card-required">
+            <input class="approved-option sr-only" type="checkbox" checked disabled aria-labelledby="offer-camera" aria-describedby="price-camera offer-required">
+            <span class="approved-thumb approved-thumb-camera"><img class="approved-photo" src="assets/oferta-camera.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <span class="approved-details">
+              <strong id="offer-camera">Câmera veicular Uber</strong>
+              <span class="approved-description">Duas lentes para gravar a rua e a cabine.</span>
+              <span class="approved-prices">
+                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;349,90</del></span>
+                <data class="approved-price" id="price-camera" value="3990"><span class="sr-only">Preço da oferta </span>R$&nbsp;39,90</data>
+              </span>
+              <span class="approved-required" id="offer-required"><span class="approved-shield" aria-hidden="true"></span>Item obrigatório da promoção</span>
+            </span>
+            <span class="approved-box" aria-hidden="true"></span>
+          </label>
+        </li>
+        <li>
+          <label class="approved-card">
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-suporte" aria-describedby="price-suporte">
+            <span class="approved-thumb"><img class="approved-photo" src="assets/oferta-suporte.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <span class="approved-details">
+              <strong id="offer-suporte">Suporte + Carregador Turbo</strong>
+              <span class="approved-description">Fixação segura e carregamento rápido.</span>
+              <span class="approved-prices">
+                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;149,90</del></span>
+                <data class="approved-price" id="price-suporte" value="2990"><span class="sr-only">Preço da oferta </span>R$&nbsp;29,90</data>
+              </span>
+            </span>
+            <span class="approved-box" aria-hidden="true"></span>
+          </label>
+        </li>
+        <li>
+          <label class="approved-card">
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-compressor" aria-describedby="price-compressor">
+            <span class="approved-thumb"><img class="approved-photo" src="assets/oferta-compressor.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <span class="approved-details">
+              <strong id="offer-compressor">Compressor Portátil 3 em 1</strong>
+              <span class="approved-description">Compressor, macaco e partida de emergência.</span>
+              <span class="approved-prices">
+                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;399,90</del></span>
+                <data class="approved-price" id="price-compressor" value="9990"><span class="sr-only">Preço da oferta </span>R$&nbsp;99,90</data>
+              </span>
+            </span>
+            <span class="approved-box" aria-hidden="true"></span>
+          </label>
+        </li>
+        <li>
+          <label class="approved-card">
+            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-tablet" aria-describedby="price-tablet">
+            <span class="approved-thumb"><img class="approved-photo" src="assets/oferta-tablet.webp?v=2" alt="" width="1254" height="1254" decoding="async"></span>
+            <span class="approved-details">
+              <strong id="offer-tablet">Tablet Uber</strong>
+              <span class="approved-description">Mais navegação, corridas e praticidade no seu dia a dia.</span>
+              <span class="approved-prices">
+                <span><span class="sr-only">Preço anterior </span><del>R$&nbsp;599,90</del></span>
+                <data class="approved-price" id="price-tablet" value="14990"><span class="sr-only">Preço da oferta </span>R$&nbsp;149,90</data>
+              </span>
+            </span>
+            <span class="approved-box" aria-hidden="true"></span>
+          </label>
+        </li>
+      </ul>
+
+      <div class="approved-summary" id="approved-selection" role="status">
+        <span class="approved-cart" aria-hidden="true"><span></span></span>
+        <div class="approved-summary-label">
+          <strong id="approved-count">1 item selecionado</strong>
+          <span>Total da promoção</span>
+        </div>
+        <strong class="approved-total" id="approved-total">R$&nbsp;39,90</strong>
+      </div>
+      <button class="primary-action approved-action" id="approved-action" type="button" aria-haspopup="dialog">
+        <span>Continuar com a seleção</span>
+        <span class="arrow" aria-hidden="true"></span>
+      </button>
+    </section>
+  </main>
+  <dialog class="approved-dialog" id="selection-dialog" aria-labelledby="selection-dialog-title">
+    <h2 id="selection-dialog-title">Sua seleção</h2>
+    <ul class="approved-dialog-items" id="selection-items"></ul>
+    <p class="approved-dialog-total"><span>Total da promoção</span><strong id="selection-total"></strong></p>
+    <p class="approved-dialog-note">Seleção demonstrativa do protótipo.</p>
+    <form method="dialog">
+      <button class="primary-action" autofocus>Voltar à seleção</button>
+    </form>
+  </dialog>
+  <p class="sr-only" id="review-announcement" role="status"></p>
+</body>
+</html>

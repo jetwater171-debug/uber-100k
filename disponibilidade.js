@@ -51,7 +51,7 @@ function showPane(pane, copy, percentage) {
 }
 
 function showPostalForm() {
-  showPane(postalForm, postalInstructions, 80);
+  showPane(postalForm, postalInstructions, 57);
 }
 
 function showError(message, invalidPostalCode = false) {
@@ -204,10 +204,12 @@ postalForm.addEventListener('submit', async event => {
   }
 
   querying = true;
+  const { profileComplete, answers } = campaignFlow.read();
+  campaignFlow.save({ profileComplete, answers });
   postalError.hidden = true;
   postalCode.removeAttribute('aria-invalid');
   document.getElementById('loading-postal').textContent = formattedPostal;
-  showPane(loading, '', 80);
+  showPane(loading, '', 64);
 
   try {
     const [region] = await Promise.all([
@@ -226,7 +228,8 @@ postalForm.addEventListener('submit', async event => {
     document.getElementById('result-region').textContent = `${region.city}, ${region.state}`;
     document.getElementById('stock-city').textContent = region.city;
     document.getElementById('result-postal').textContent = formattedPostal;
-    showPane(result, '', 100);
+    campaignFlow.save({ profileComplete, answers, region: { city: region.city, state: region.state } });
+    showPane(result, '', 75);
   } catch {
     showError('A consulta está indisponível agora. Tente de novo em instantes.');
   } finally {
@@ -235,6 +238,8 @@ postalForm.addEventListener('submit', async event => {
 });
 
 result.querySelector('.edit-postal').addEventListener('click', () => {
+  const { profileComplete, answers } = campaignFlow.read();
+  campaignFlow.save({ profileComplete, answers });
   showPostalForm();
   postalCode.focus({ preventScroll: true });
   postalCode.select();
