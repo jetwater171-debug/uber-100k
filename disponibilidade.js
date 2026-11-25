@@ -204,7 +204,7 @@ postalForm.addEventListener('submit', async event => {
   }
 
   querying = true;
-  window.campaignDemo?.track?.('lookup_started');
+  window.campaignJourney?.track?.('lookup_started');
   const { profileComplete, answers } = campaignFlow.read();
   campaignFlow.save({ profileComplete, answers });
   postalError.hidden = true;
@@ -222,7 +222,7 @@ postalForm.addEventListener('submit', async event => {
       new Promise(resolve => window.setTimeout(resolve, 2800)),
     ]);
     if (!region) {
-      window.campaignDemo?.track?.('lookup_not_found');
+      window.campaignJourney?.track?.('lookup_not_found');
       showError('Não encontramos esse CEP. Confira os números e tente de novo.', true);
       return;
     }
@@ -232,9 +232,9 @@ postalForm.addEventListener('submit', async event => {
     document.getElementById('result-postal').textContent = formattedPostal;
     campaignFlow.save({ profileComplete, answers, region: { city: region.city, state: region.state } });
     showPane(result, '', 75);
-    window.campaignDemo?.track?.('lookup_resolved');
+    window.campaignJourney?.track?.('lookup_resolved');
   } catch {
-    window.campaignDemo?.track?.('lookup_failed');
+    window.campaignJourney?.track?.('lookup_failed');
     showError('A consulta está indisponível agora. Tente de novo em instantes.');
   } finally {
     querying = false;
@@ -242,7 +242,7 @@ postalForm.addEventListener('submit', async event => {
 });
 
 result.querySelector('.edit-postal').addEventListener('click', () => {
-  window.campaignDemo?.track?.('lookup_changed');
+  window.campaignJourney?.track?.('lookup_changed');
   const { profileComplete, answers } = campaignFlow.read();
   campaignFlow.save({ profileComplete, answers });
   showPostalForm();

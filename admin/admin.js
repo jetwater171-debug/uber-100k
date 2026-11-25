@@ -160,7 +160,7 @@ function dashboard(data, traffic) {
   const { counts } = data;
   return title('Visão geral', 'Acompanhe o funil e as vendas de teste da campanha.') + liveControls() + '</div>' +
     `<section class="panel live-panel"><div><h2>Monitoramento ao vivo</h2>
-      <p class="muted">Acompanhe as sessões e os pedidos registrados nas jornadas de teste.</p>
+      <p class="muted">Acompanhe a navegação compartilhada pelos visitantes e os pedidos de teste.</p>
       <div class="controls"><span class="badge">${integer.format(traffic.pageViews)} ${traffic.pageViews === 1 ? 'visita registrada' : 'visitas registradas'}</span>
       <span class="badge">Gateway prioritário · ${escape(state.settings.gateways.find(item => item.enabled)?.name || 'Nenhum ativo')}</span></div></div>
       <div class="live-score"><span>Sessões acompanhadas</span><strong>${integer.format(traffic.sessions)}</strong></div></section>` +
@@ -322,11 +322,11 @@ async function render() {
     const renderers = {
       overview: () => dashboard(data, traffic),
       pages: () => title('Páginas e funil', 'Compare visitas registradas e sessões únicas nas etapas acompanhadas.') + liveControls() + '</div><div class="columns">' +
-        panel('Tracking da jornada de teste', '<p class="empty">Abra o site abaixo e percorra as etapas. A contagem acompanha esta jornada de teste.</p>' +
+        panel('Navegação registrada', '<p class="empty">As visitas aparecem quando o visitante permite métricas. O link abaixo abre uma jornada de teste do administrador.</p>' +
           '<a href="/?analytics=demo" target="_blank" rel="noopener" class="button primary">Abrir jornada com tracking</a> ' +
           '<button type="button" id="refresh-tracking" class="button secondary">Atualizar</button>' +
           bars(traffic.rows.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
-          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`) +
+          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões`) +
         panel('Sessões únicas por etapa', bars(traffic.sessionsByPage.map(row => ({ name: trackedLabels[row.page], count: row.count })))) + '</div>',
       leads: () => listView('leads', data),
       sales: () => listView('sales', data),
@@ -338,7 +338,9 @@ async function render() {
           ({ name: trackedLabels[row.page], count: row.count })))) + '</div>',
       catalog: catalogView,
       gateways: () => gatewayView(data),
-      tracking: () => title('Tracking', 'Configure a matriz de eventos para validar o fluxo em simulação.') + '</div><div class="columns">' + trackingCards(['Meta','TikTok']) + '</div>',
+      tracking: () => title('Tracking', 'Consulte os eventos recebidos no período e teste os canais de anúncios.') + range() + '</div>' +
+        panel('Eventos do site', bars(response.pixel), response.limited ? 'Últimos 1.000 registros por consulta' : 'Medição própria') +
+        '<div class="columns">' + trackingCards(['Meta','TikTok']) + '</div>',
       utmfy: () => title('UTMfy e Pushcut', 'Valide eventos e notificações com registros de teste.') + '</div><div class="stack">' +
         '<div class="columns">' + trackingCards(['UTMfy','Pushcut']) + '</div>' + panel('Histórico de testes', auditTable(placeholderHistory.filter(entry => entry.detail !== 'SMSMais'))) + '</div>',
       sms: () => title('SMS e remarketing', 'Teste o registro de eventos da integração em modo de demonstração.') + '</div><div class="stack">' +
@@ -352,7 +354,7 @@ async function render() {
           [date.format(new Date(row.at)), escape(row.page), escape(row.title)]))) + '</div>',
       navigation: () => title('Saídas e retornos', 'Veja até onde as sessões avançaram e em quais páginas houve retorno pelo navegador.') + range() + '</div>' +
         '<div class="columns">' + panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
-          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`) +
+          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões`) +
         panel('Retornos por página', bars(journey.returns), journey.limited ? 'Últimos 1.000 eventos' : '') + '</div>',
       domains: () => domainsView(domains),
       security: () => title('Auditoria e segurança', 'Histórico das mudanças feitas por operadores neste painel.') + '</div>' +

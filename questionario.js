@@ -82,14 +82,14 @@ form.addEventListener('change', event => {
 
 form.addEventListener('submit', event => {
   event.preventDefault();
-  window.campaignDemo?.track?.(`quiz_${currentIndex + 1}`);
+  window.campaignJourney?.track?.(`quiz_${currentIndex + 1}`);
   const nextQuestion = questions[currentIndex + 1];
   const pendingQuestion = nextQuestion ?? questions.find(question => !answers.has(question.route));
   if (pendingQuestion) {
     window.location.hash = pendingQuestion.route;
   } else {
     campaignFlow.save({ profileComplete: campaignFlow.read().profileComplete === true, answers: answers.size });
-    window.campaignDemo?.track?.('quiz_completed');
+    window.campaignJourney?.track?.('quiz_completed');
     window.location.assign('disponibilidade.html');
   }
 });

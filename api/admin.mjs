@@ -14,6 +14,6 @@ export default {
     }
     const store = supabaseStore({ url, secret, fetch });
     const auth = passwordAuth({ password, secret, sessions: store, trustVercel: env.VERCEL === '1' });
-    return adminHandler({ auth, store })(request);
+    return adminHandler({ auth, store, siteSecret: secret })(request);
   },
 };

@@ -8,7 +8,7 @@ const publicFiles = [
   'index.html', 'sobre-a-oferta.html', 'eligibilidade.html', 'questionario.html',
   'disponibilidade.html', 'analise.html', 'admin.html', 'styles.css',
   'analise.css', 'analise.js', 'cep-mapa.js', 'disponibilidade.js', 'eligibilidade.js',
-  'fluxo.js', 'questionario.js', 'demo-tracking.js', 'assets', 'admin',
+  'fluxo.js', 'questionario.js', 'demo-tracking.js', 'site-journey.js', 'assets', 'admin',
 ];
 
 export async function build() {

@@ -6,6 +6,9 @@ export function memoryStore() {
   const traffic = new Map();
   const journey = new Map();
   return {
+    async readCatalog() {
+      return { catalog: structuredClone(snapshot.catalog), settings: { offerExtras: snapshot.settings.offerExtras } };
+    },
     async read() {
       return structuredClone(snapshot);
     },
@@ -57,6 +60,12 @@ export function supabaseStore({ url, secret, fetch }) {
   }
 
   return {
+    async readCatalog() {
+      const [row] = await request('id=eq.main&select=catalog:snapshot->catalog,extras:snapshot->settings->offerExtras&limit=1');
+      if (!row) throw new HttpError(503, 'Catálogo indisponível.');
+      const defaults = initialState();
+      return { catalog: row.catalog ?? defaults.catalog, settings: { offerExtras: row.extras ?? defaults.settings.offerExtras } };
+    },
     async read() {
       const [entry] = await request('id=eq.main&select=revision,snapshot&limit=1');
       if (!entry) throw new HttpError(503, 'A migração do painel ainda não foi aplicada.');

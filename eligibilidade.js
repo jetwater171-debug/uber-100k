@@ -121,7 +121,7 @@ form.addEventListener('submit', event => {
 
   if (form.reportValidity()) {
     campaignFlow.save({ profileComplete: true });
-    window.campaignDemo?.track?.('profile_submitted');
+    window.campaignJourney?.track?.('profile_submitted');
     window.location.assign('questionario.html');
   }
 });

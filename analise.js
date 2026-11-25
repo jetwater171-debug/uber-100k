@@ -35,9 +35,9 @@ for (const card of cards) updateDiscount(card);
 
 let catalogReady = false;
 async function refreshDemoCatalog() {
-  if (!window.campaignDemo) return;
+  if (!window.campaignJourney) return;
   try {
-    const prices = new Map((await window.campaignDemo.catalog()).map(item => [item.id, item.cents]));
+    const prices = new Map((await window.campaignJourney.catalog()).map(item => [item.id, item.cents]));
     for (const card of cards) {
       const option = card.querySelector('.approved-option');
       const cents = prices.get(option.value);
@@ -56,7 +56,14 @@ async function refreshDemoCatalog() {
     demoCatalogNote.textContent = catalogReady ? '' : 'A câmera está indisponível no catálogo de teste.';
   } catch {
     catalogReady = false;
-    demoCatalogNote.textContent = 'Catálogo de teste indisponível. Abra uma nova jornada pelo painel.';
+    demoCatalogNote.textContent = 'Não foi possível carregar os preços. Atualize a página para tentar novamente.';
+  }
+  approvedAction.disabled = !catalogReady;
+  if (!catalogReady) {
+    for (const card of cards) {
+      card.parentElement.hidden = true;
+      card.querySelector('.approved-option').checked = false;
+    }
   }
   demoCatalogNote.hidden = !demoCatalogNote.textContent;
   syncSelection();
@@ -83,7 +90,7 @@ function syncSelection() {
 
 offerList.addEventListener('change', () => {
   syncSelection();
-  window.campaignDemo?.track?.('selection_changed');
+  window.campaignJourney?.track?.('selection_changed');
 });
 window.addEventListener('pageshow', syncSelection);
 
@@ -100,9 +107,9 @@ function renderSelection() {
 }
 
 approvedAction.addEventListener('click', () => {
-  window.campaignDemo?.track?.('selection_opened');
+  window.campaignJourney?.track?.('selection_opened');
   renderSelection();
-  demoOrder.hidden = !catalogReady;
+  demoOrder.hidden = !catalogReady || !window.campaignDemo;
   demoOrderCreate.hidden = false;
   demoOrderResult.hidden = true;
   demoOrderLink.hidden = true;
@@ -120,7 +127,7 @@ demoOrderCreate.addEventListener('click', async () => {
     demoOrderResult.textContent = `Pedido de teste salvo · ${currency.format(order.total / 100)}`;
     demoOrderLink.hidden = false;
   } catch (error) {
-    window.campaignDemo?.track?.('selection_failed');
+    window.campaignJourney?.track?.('selection_failed');
     demoOrderResult.textContent = error.message;
     if (error.status === 409) {
       await refreshDemoCatalog();
@@ -175,7 +182,7 @@ function advanceReview(elapsed, duration) {
 }
 
 async function runReview() {
-  window.campaignDemo?.track?.('review_started');
+  window.campaignJourney?.track?.('review_started');
   const catalogRequest = refreshDemoCatalog();
   const rows = [...reviewPanel.querySelectorAll('.review-row')];
   reviewProgress.hidden = false;
@@ -219,7 +226,7 @@ async function runReview() {
 
   reviewPage.hidden = true;
   approvedPage.hidden = false;
-  window.campaignDemo?.track?.('review_completed');
+  window.campaignJourney?.track?.('review_completed');
   syncSelection();
   reviewAnnouncement.textContent = 'Perfil aprovado na simulação. Confira os itens disponíveis para seleção.';
 }

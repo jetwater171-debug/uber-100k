@@ -9,6 +9,40 @@ import { csv } from '../server/reports.mjs';
 
 const origin = 'http://127.0.0.1:4280';
 const sessionId = '015379c9-c724-4c57-9aa4-f32cdc3049cb';
+
+test('a normal site visit shares consented milestones with admin reports without admin access', async () => {
+  const { request, login } = fixture();
+  const start = await request('site-session', { body: {} });
+  assert.equal(start.status, 200);
+  const first = start.headers.get('set-cookie').split(';')[0];
+  const send = (route, cookie, body, extra = {}) => request(route, { body, headers: { Cookie: cookie, ...extra } });
+  const pageView = { page: 'inicio', event: 'page_view' };
+  assert.equal((await send('site-event', first, pageView)).status, 403);
+  assert.equal((await request('site-preference', { body: { metrics: true }, origin: 'https://example.org' })).status, 403);
+  const optIn = await send('site-preference', first, { metrics: true });
+  const cookie = optIn.headers.get('set-cookie').split(';')[0];
+  assert.equal((await send('site-session', cookie, {})).headers.get('set-cookie'), null);
+  assert.equal((await request('settings', { headers: { Cookie: cookie } })).status, 401);
+  assert.equal((await send('site-event', cookie, { ...pageView, email: 'nao-registrar' })).status, 400);
+  assert.equal((await send('site-event', cookie + 'x', pageView)).status, 401);
+  assert.equal((await send('site-event', cookie, pageView, { 'Sec-GPC': '1' })).status, 403);
+  for (const page of ['inicio', 'inicio', 'oferta', 'cadastro', 'questionario', 'regiao', 'analise']) {
+    assert.equal((await send('site-event', cookie, { page, event: 'page_view' })).status, 204);
+  }
+  for (const [page, event] of [['cadastro', 'profile_submitted'], ['analise', 'selection_opened']]) {
+    assert.equal((await send('site-event', cookie, { page, event })).status, 204);
+  }
+  const off = (await send('site-preference', cookie, { metrics: false })).headers.get('set-cookie').split(';')[0];
+  assert.equal((await send('site-event', off, pageView)).status, 403);
+  const items = (await (await request('site-catalog')).json()).items;
+  assert.equal(items.length, 6);
+  assert.deepEqual(Object.keys(items[0]).sort(), ['cents', 'id']);
+  await login();
+  const get = async section => (await request('view', { query: { section } })).json();
+  assert.equal((await get('overview')).traffic.sessions, 1);
+  assert.deepEqual((await get('tracking')).pixel.map(row => row.count), [6, 1, 1, 1]);
+  assert.equal((await get('leads')).data.total, 1);
+});
 function fixture() {
   const handler = adminHandler({ auth: localAuth(), store: memoryStore(), now: () => Date.UTC(2026, 10, 25) });
   let session;

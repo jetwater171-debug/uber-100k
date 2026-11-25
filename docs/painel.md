@@ -2,6 +2,12 @@
 
 O painel tem quinze seções. Visão geral, funil, cadastros, público, vendas, catálogo, gateways PIX, tracking, UTMfy e Pushcut, SMS, fila de testes, eventos da jornada, saídas e retornos, domínios e auditoria. O [inventário do iFoodbag](auditoria-admin.md) lista o comportamento original e as dependências.
 
+## Sessão de quem abre o site
+
+Ao abrir qualquer uma das seis páginas, o navegador recebe uma sessão temporária do próprio site, válida por uma hora. A opção **Privacidade** permite compartilhar ou interromper as métricas. Depois da autorização, páginas e marcos do formulário chegam ao Supabase e aparecem em Visão geral, Páginas, Leads e Eventos da jornada. O navegador pode solicitar privacidade com GPC ou DNT. O catálogo usa os mesmos preços e disponibilidade configurados no painel independentemente dessa preferência.
+
+Em **Tracking → Eventos do site**, PageView conta páginas visitadas, ViewContent conta aberturas da apresentação da oferta, Lead conta formulários concluídos e InitiateCheckout conta aberturas do resumo da seleção. Cada contagem considera uma ocorrência por sessão, página, evento e dia. Esses totais incluem também as jornadas abertas pelo operador. Os cartões de Meta e TikTok são diagnósticos de simulação. As rotas públicas aceitam somente nomes de páginas e ações previstos e não recebem os campos do cadastro.
+
 ## Abrir no computador
 
 Com Node.js 24 instalado, execute `npm run dev` na pasta do projeto e abra [o painel local](http://127.0.0.1:4280/admin). Use **Abrir painel de teste**. A sessão e as mudanças de configuração são mantidas em memória durante essa execução. **Páginas e funil → Abrir jornada com tracking** abre o site e registra a passagem pelas seis páginas. Volte ao painel e use **Atualizar** para consultar as contagens. O tracking identifica apenas a sessão de teste e a página visitada.

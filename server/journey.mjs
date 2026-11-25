@@ -8,6 +8,8 @@ export const journeyPages = {
 };
 
 const milestones = {
+  inicio: { offer_requested: 'Apresentação da oferta solicitada' },
+  oferta: { signup_started: 'Formulário iniciado' },
   cadastro: { profile_submitted: 'Cadastro concluído' },
   questionario: {
     ...Object.fromEntries(Array.from({ length: 6 }, (_, index) =>

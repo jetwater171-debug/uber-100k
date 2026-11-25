@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { siteSessionHandler } from './site-session.mjs';
 import { channels, diagnosticModes, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports, salesAudit } from './reports.mjs';
 import { HttpError } from './errors.mjs';
@@ -170,7 +171,19 @@ async function viewReport(store, params, time, siteOrigin) {
       checks: snapshot.audit.filter(entry => entry.domainPage),
     },
   };
-  if (['catalog', 'tracking', 'utmfy', 'sms', 'queue', 'security'].includes(section)) return { state };
+  if (section === 'tracking') {
+    const { since, until } = reports(params, time);
+    const [traffic, events] = await Promise.all([
+      trafficReport(store, since, until), store.readJourneyEvents(since, undefined, until),
+    ]);
+    return { state, pixel: [
+      { name: 'PageView', count: traffic.pageViews },
+      { name: 'ViewContent', count: traffic.rows.find(row => row.page === 'oferta').count },
+      { name: 'Lead', count: events.filter(row => row.event === 'profile_submitted').length },
+      { name: 'InitiateCheckout', count: events.filter(row => row.event === 'selection_opened').length },
+    ], limited: traffic.limit || events.length >= 1000 };
+  }
+  if (['catalog', 'utmfy', 'sms', 'queue', 'security'].includes(section)) return { state };
 
   const { orders, ...overview } = reports(params, time, snapshot.orders);
   const { since, until } = overview;
@@ -254,13 +267,17 @@ async function recordDemoNavigation(store, event, at) {
   throw new HttpError(409, 'A fila mudou. Reabra a página para tentar registrar os eventos de teste.');
 }
 
-export function adminHandler({ auth, store, now = Date.now }) {
+export function adminHandler({ auth, store, now = Date.now, siteSecret = randomBytes(32) }) {
+  const site = siteSessionHandler({ secret: siteSecret, store, now });
   return async request => {
     try {
       const { url, route } = endpoint(request);
       if (!['GET', 'POST'].includes(request.method)) return json({ error: 'Método indisponível.' }, 405, { Allow: 'GET, POST' });
       if (request.method === 'POST' && !sameOrigin(request.headers.get('Origin'), url.origin)) {
         throw new HttpError(403, 'Origem inválida.');
+      }
+      if (['site-catalog', 'site-session', 'site-event', 'site-preference'].includes(route)) {
+        return await site(request, route, body);
       }
       if (request.method === 'GET' && route === 'mode') return json({ local: auth.demo, prototype: true });
       if (request.method === 'POST' && route === 'login') {
