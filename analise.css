@@ -806,6 +806,28 @@
 @media (orientation: portrait) and (max-width: 600px) {
   .review-screen main.layout { max-width: none; }
 
+  .review-page {
+    grid-template-rows: auto minmax(min-content, 1fr) auto;
+    align-content: stretch;
+    gap: clamp(9px, 1.8dvh, 16px);
+    padding: var(--phone-start) var(--phone-gutter) var(--page-bottom);
+  }
+
+  .review-intro { padding-inline: 0; }
+  .review-intro h1 { font-size: clamp(24px, min(8.6cqw, 5.7dvh), 44px); }
+  .review-panel {
+    grid-template-rows: minmax(min-content, 1.18fr) minmax(min-content, 1fr) auto;
+    gap: clamp(7px, 1.45dvh, 14px);
+  }
+
+  .review-visual { min-height: clamp(112px, 20dvh, 176px); }
+  .review-checks { display: grid; grid-auto-rows: minmax(min-content, 1fr); }
+  .review-row { min-height: clamp(29px, 4.75dvh, 42px); }
+  .review-note { min-height: clamp(42px, 6.3dvh, 61px); }
+
+  .review-actions { margin-top: 0; }
+  .review-actions, .review-simulation { min-height: var(--phone-action-height); }
+
   .approved-page {
     --offers-gutter: var(--phone-gutter);
     grid-template-rows: auto auto auto minmax(min-content, 1fr) auto;
@@ -823,6 +845,18 @@
 
   .approved-summary { padding-block: 6px; }
   .approved-action.primary-action { min-height: var(--phone-action-height); }
+}
+
+@media (orientation: portrait) and (max-width: 600px) and (max-height: 530px) {
+  .review-page { gap: 6px; }
+  .review-panel {
+    grid-template-rows: auto auto auto;
+    align-content: space-between;
+    gap: 6px;
+  }
+  .review-visual { min-height: clamp(78px, 17.5dvh, 94px); }
+  .review-row { min-height: 24px; }
+  .review-note { min-height: 0; }
 }
 
 @media (orientation: portrait) and (max-width: 600px), (orientation: landscape) and (min-width: 540px) and (max-height: 480px) {
