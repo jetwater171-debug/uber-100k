@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { channels, eventTypes, gateways } from './fixtures.mjs';
-import { csv, filterRows, matchingRows, reports } from './reports.mjs';
+import { channels, diagnosticModes, eventTypes, gateways } from './fixtures.mjs';
+import { csv, filterRows, matchingRows, reports, salesAudit } from './reports.mjs';
 import { HttpError } from './errors.mjs';
 import { journeyPages, journeyTitle, summarizeJourney } from './journey.mjs';
 import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueReminders, queueTest, reconcileOrder, uuid } from './operations.mjs';
@@ -40,7 +40,10 @@ async function body(request) {
   return data;
 }
 
-function amend(state, command, at) {
+const sameOrigin = (origin, expected) => origin === expected;
+const testOrigin = 'https://origem-de-teste.test';
+
+function amend(state, command, at, siteOrigin) {
   const { type, key, value } = command;
   switch (type) {
     case 'feature':
@@ -78,7 +81,7 @@ function amend(state, command, at) {
       return { title: 'PIX de teste', detail: key, code: `SIMULACAO-${randomUUID()}`, status: 'Simulado · sem cobrança' };
     case 'integration-test':
       if (!channels.includes(key)) break;
-      return queueTest(state, key, at);
+      return queueTest(state, key, at, value);
     case 'queue-process':
       return processQueue(state, at);
     case 'order-payment':
@@ -89,6 +92,17 @@ function amend(state, command, at) {
       return queueReminder(state, key, at);
     case 'order-reminders':
       return queueReminders(state, value, at);
+    case 'domain-check': {
+      if (!Object.hasOwn(journeyPages, key) || !['current', 'test'].includes(value)) break;
+      const candidate = value === 'current' ? siteOrigin : testOrigin;
+      const accepted = sameOrigin(candidate, siteOrigin);
+      return {
+        title: 'Verificação de domínio simulada',
+        detail: new URL(candidate).hostname,
+        domainPage: key,
+        status: accepted ? 'Origem aceita no teste' : 'Origem rejeitada no teste',
+      };
+    }
   }
   throw new HttpError(400, 'Ação inválida para esta configuração.');
 }
@@ -97,7 +111,7 @@ const trackedPages = Object.keys(journeyPages);
 const leadFields = ['id', 'name', 'city', 'origin', 'device'];
 const saleFields = ['id', 'sessionId', 'gateway'];
 const sections = ['overview', 'pages', 'leads', 'audience', 'sales', 'catalog', 'gateways',
-  'tracking', 'activity', 'utmfy', 'sms', 'queue', 'navigation', 'security'];
+  'tracking', 'activity', 'utmfy', 'sms', 'queue', 'navigation', 'domains', 'security'];
 
 async function trafficReport(store, since) {
   const visits = await store.readTraffic(since);
@@ -123,18 +137,28 @@ async function trafficReport(store, since) {
   };
 }
 
-async function viewReport(store, params, time) {
+async function viewReport(store, params, time, siteOrigin) {
   const section = params.get('section');
   if (!sections.includes(section)) throw new HttpError(404, 'Seção indisponível.');
   const snapshot = await store.read();
   const state = { version: snapshot.version, settings: snapshot.settings };
   if (section === 'catalog') state.catalog = snapshot.catalog;
   if (['utmfy', 'sms', 'security'].includes(section)) state.audit = snapshot.audit;
+  if (['tracking', 'utmfy', 'sms'].includes(section)) state.diagnostics = diagnosticModes;
   if (section === 'sms') {
     state.orders = snapshot.orders.filter(order => order.status === 'Pendente no teste');
     state.queue = snapshot.queue.filter(job => job.event === 'Remarketing');
   }
   if (section === 'queue') state.queue = snapshot.queue;
+  if (section === 'domains') return {
+    state,
+    domains: {
+      origin: siteOrigin,
+      testOrigin,
+      pages: journeyPages,
+      checks: snapshot.audit.filter(entry => entry.domainPage),
+    },
+  };
   if (['catalog', 'tracking', 'utmfy', 'sms', 'queue', 'security'].includes(section)) return { state };
 
   const { leads, orders, ...overview } = reports(params, time, snapshot.orders);
@@ -142,7 +166,9 @@ async function viewReport(store, params, time) {
     const records = await leadRecords(store, leads, overview.daily[0].day, params);
     return { state, data: { ...filterRows(records.rows, params, leadFields), limited: records.limited } };
   }
-  if (section === 'sales') return { state, data: filterRows(orders, params, saleFields) };
+  if (section === 'sales') return {
+    state, data: { ...filterRows(orders, params, saleFields), audit: salesAudit(matchingRows(orders, params, saleFields)) },
+  };
   if (section === 'activity' || section === 'navigation') {
     const since = overview.daily[0].day;
     const [events, traffic] = await Promise.all([
@@ -217,7 +243,7 @@ export function adminHandler({ auth, store, now = Date.now }) {
     try {
       const { url, route } = endpoint(request);
       if (!['GET', 'POST'].includes(request.method)) return json({ error: 'Método indisponível.' }, 405, { Allow: 'GET, POST' });
-      if (request.method === 'POST' && request.headers.get('Origin') !== url.origin) {
+      if (request.method === 'POST' && !sameOrigin(request.headers.get('Origin'), url.origin)) {
         throw new HttpError(403, 'Origem inválida.');
       }
       if (request.method === 'GET' && route === 'mode') return json({ local: auth.demo, prototype: true });
@@ -258,7 +284,7 @@ export function adminHandler({ auth, store, now = Date.now }) {
         const command = await body(request);
         const state = await store.read();
         if (command.version !== state.version) throw new HttpError(409, 'O painel mudou. Atualize e tente novamente.');
-        const entry = await saveOperation(store, state, amend(state, command, at), operator, at);
+        const entry = await saveOperation(store, state, amend(state, command, at, url.origin), operator, at);
         return json({ state, result: entry });
       }
       if (request.method !== 'GET') throw new HttpError(404, 'Rota indisponível.');
@@ -267,12 +293,13 @@ export function adminHandler({ auth, store, now = Date.now }) {
         const items = demoCatalog(await store.read()).map(({ id, cents }) => ({ id, cents }));
         return json({ items });
       }
-      if (route === 'view') return json(await viewReport(store, url.searchParams, now()));
+      if (route === 'view') return json(await viewReport(store, url.searchParams, now(), url.origin));
       if (route === 'settings') return json(await store.read());
       const supported = ['traffic', 'overview', 'leads', 'sales', 'lead', 'order', 'export'];
       if (!supported.includes(route)) throw new HttpError(404, 'Rota indisponível.');
       if (route === 'order') {
-        const order = (await store.read()).orders.find(entry => entry.id === url.searchParams.get('id'));
+        const lookup = url.searchParams.get('id')?.trim();
+        const order = (await store.read()).orders.find(entry => lookup && (entry.id === lookup || entry.payment?.code === lookup));
         if (!order) throw new HttpError(404, 'Pedido de teste indisponível.');
         return json({ order });
       }
@@ -292,6 +319,10 @@ export function adminHandler({ auth, store, now = Date.now }) {
       const salesExport = route === 'export' && url.searchParams.get('kind') === 'sales';
       const orders = ['overview', 'sales'].includes(route) || salesExport ? (await store.read()).orders : [];
       const data = reports(url.searchParams, now(), orders);
+      if (route === 'export' && url.searchParams.get('kind') === 'audience') {
+        const rows = Object.entries(data.audience).flatMap(([category, totals]) => totals.map(item => ({ category, ...item })));
+        return csvFile('publico-teste.csv', rows, [['Dimensão', 'category'], ['Segmento', 'name'], ['Sessões', 'count']]);
+      }
       if (route === 'traffic') {
         return json(await trafficReport(store, data.daily[0].day));
       }
@@ -315,13 +346,7 @@ export function adminHandler({ auth, store, now = Date.now }) {
           : [['Sessão','id'], ['Nome de teste','name'], ['Cidade','city'], ['Origem','origin'], ['Aparelho','device'], ['Data','createdAt']];
         const records = salesExport ? data.orders : (await leadRecords(store, data.leads, data.daily[0].day, url.searchParams)).rows;
         const rows = matchingRows(records, url.searchParams, salesExport ? saleFields : leadFields);
-        return new Response(csv(rows, fields), {
-          headers: {
-            'Content-Type': 'text/csv; charset=utf-8',
-            'Content-Disposition': `attachment; filename="${salesExport ? 'vendas' : 'leads'}-teste.csv"`,
-            'Cache-Control': 'no-store',
-          },
-        });
+        return csvFile(salesExport ? 'vendas-teste.csv' : 'leads-teste.csv', rows, fields);
       }
       throw new HttpError(404, 'Rota indisponível.');
     } catch (error) {
@@ -332,4 +357,14 @@ export function adminHandler({ auth, store, now = Date.now }) {
       return json({ error: 'O painel encontrou uma falha interna.' }, 500);
     }
   };
+}
+
+function csvFile(filename, rows, fields) {
+  return new Response(csv(rows, fields), {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
+    },
+  });
 }

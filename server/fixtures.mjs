@@ -2,6 +2,13 @@ export const stages = ['Início', 'Cadastro', 'Questionário', 'Região', 'Sele�
 export const gateways = ['ClownPay', 'GhostsPay', 'Sunize', 'Paradise', 'AtomoPay', 'Bravo Pay'];
 export const channels = ['Meta', 'TikTok', 'UTMfy', 'Pushcut', 'SMSMais'];
 export const eventTypes = ['PageView', 'ViewContent', 'Lead', 'InitiateCheckout', 'Purchase'];
+export const diagnosticModes = {
+  Meta: ['Pixel', 'API de conversões'],
+  TikTok: ['Pixel', 'API de eventos'],
+  UTMfy: ['PIX gerado', 'PIX pago', 'Venda manual'],
+  Pushcut: ['PIX gerado', 'PIX pago'],
+  SMSMais: ['SMS de teste', 'Torpedo de voz', 'Retorno de entrega'],
+};
 
 export const catalog = [
   { id: 'camera', name: 'Câmera veicular', cents: 3990, active: true },
@@ -32,6 +39,7 @@ export function demoData(now = Date.now()) {
   const cities = ['São Paulo', 'Curitiba', 'Recife', 'Mogi das Cruzes', 'Belo Horizonte', 'Campinas'];
   const origins = ['Direto', 'Meta', 'TikTok', 'Busca'];
   const devices = ['Android', 'iPhone', 'Desktop'];
+  const placements = ['Feed', 'Stories', 'Reels'];
   const sessions = [];
   const orders = [];
   for (let index = 0; index < 168; index++) {
@@ -42,13 +50,15 @@ export function demoData(now = Date.now()) {
     const step = depth < 2 ? 0 : depth < 4 ? 1 : depth < 6 ? 2 : depth < 8 ? 3 : depth < 9 ? 4 : 5;
     const id = `SIM-${String(index + 1).padStart(4, '0')}`;
     const time = new Date(now - (day * 86400000 + slot * 60000));
+    const origin = origins[Math.floor(index / 3) % origins.length];
     const session = {
       id,
       name: `Motorista de teste ${index + 1}`,
       steps: stages.slice(0, step + 1),
       city: cities[index % cities.length],
-      origin: origins[Math.floor(index / 3) % origins.length],
+      origin,
       device: devices[(index + day) % devices.length],
+      placement: ['Direto', 'Busca'].includes(origin) ? origin : placements[(index + day) % placements.length],
       createdAt: time.toISOString(),
     };
     sessions.push(session);

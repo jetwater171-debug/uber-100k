@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HttpError } from './errors.mjs';
+import { diagnosticModes } from './fixtures.mjs';
 
 export const status = {
   awaiting: 'Aguardando PIX de teste',
@@ -122,8 +123,11 @@ export function reconcileOrder(state, id, outcome, at) {
   return { title: 'Pedido de teste reconciliado', detail: order.id, status: next };
 }
 
-export function queueTest(state, channel, at) {
-  enqueue(state, { id: randomUUID(), channel, event: 'Diagnóstico', detail: 'Teste de integração', at });
+export function queueTest(state, channel, at, mode) {
+  if (mode !== undefined && !diagnosticModes[channel]?.includes(mode)) {
+    throw new HttpError(400, 'Escolha um diagnóstico disponível para este canal.');
+  }
+  enqueue(state, { id: randomUUID(), channel, event: mode || 'Diagnóstico', detail: 'Teste de integração', at });
   return { title: 'Teste enfileirado', detail: channel, status: 'Simulação' };
 }
 

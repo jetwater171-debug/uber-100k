@@ -1,6 +1,6 @@
 # Painel da campanha
 
-O painel tem quatorze seções. Visão geral, funil, cadastros, público, vendas, catálogo, gateways PIX, tracking, UTMfy e Pushcut, SMS, fila de testes, eventos da jornada, saídas e retornos, e auditoria. O [inventário do iFoodbag](auditoria-admin.md) lista o comportamento original e as dependências.
+O painel tem quinze seções. Visão geral, funil, cadastros, público, vendas, catálogo, gateways PIX, tracking, UTMfy e Pushcut, SMS, fila de testes, eventos da jornada, saídas e retornos, domínios e auditoria. O [inventário do iFoodbag](auditoria-admin.md) lista o comportamento original e as dependências.
 
 ## Abrir no computador
 
@@ -14,6 +14,8 @@ Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente
 
 **Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas e retornos** mostra a etapa mais avançada por sessão e os retornos gerados pela navegação normal do navegador.
 
+**Vendas** resume pedidos e valores simulados por estado com os mesmos filtros da tabela. Use **Gateways PIX → Consulta de transação** para localizar um pedido de teste pelo identificador ou pelo código gerado. **Público** exporta os agrupamentos de exemplo por cidade, origem, dispositivo e posicionamento.
+
 **Eventos da jornada** registra a conclusão do cadastro, o avanço em cada pergunta, a conclusão do quiz, os resultados da consulta de CEP, a análise simulada e a seleção de ofertas. Cada ação é contabilizada uma vez por página, sessão e dia, sem armazenar campos do formulário, CEP ou respostas.
 
 Use **Atualização automática** na Visão geral ou em Páginas e funil para atualizar os relatórios a cada 30 segundos enquanto a aba estiver ativa.
@@ -21,6 +23,8 @@ Use **Atualização automática** na Visão geral ou em Páginas e funil para at
 Em **Leads**, use o filtro **Jornadas acompanhadas** para consultar as sessões de teste anônimas. **Detalhes** mostra as páginas registradas por dia e os pedidos da sessão. A exportação CSV usa o mesmo filtro da lista.
 
 Os eventos configurados no painel entram na fila local durante a jornada acompanhada. `PageView` registra cada página uma vez por sessão e dia, `ViewContent` registra a abertura da oferta e `Lead` é enfileirado uma vez por sessão após o envio válido do formulário. A fila preserva os itens pendentes e mantém até 300 registros.
+
+Selecione um cenário para testar Pixel, API de eventos, PIX gerado ou pago, venda manual, SMS, voz ou retorno de entrega. O diagnóstico é registrado na fila de simulação. **Domínios** executa testes locais da regra de origem com o domínio do painel e com um domínio reservado para testes.
 
 ## Publicar o painel autenticado
 

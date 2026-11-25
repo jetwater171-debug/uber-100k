@@ -60,6 +60,7 @@ export function reports(params, now = Date.now(), journeyOrders = []) {
       city: counts(paidAudience, 'city'),
       origin: counts(paidAudience, 'origin'),
       device: counts(paidAudience, 'device'),
+      placement: counts(paidAudience, 'placement'),
     },
     gatewaySales: gateways.map(name => {
       const gatewayOrders = transactions.filter(row => row.gateway === name);
@@ -87,10 +88,26 @@ export function matchingRows(rows, params, fields) {
   return rows.filter(row => {
     const status = params.get('status');
     const gateway = params.get('gateway');
+    const source = params.get('source');
     if (status && row.status !== status) return false;
     if (gateway && row.gateway !== gateway) return false;
+    if (source === 'tracked' && !row.items && row.source !== 'tracked') return false;
+    if (source === 'sample' && (row.items || row.source === 'tracked')) return false;
     return fields.some(field => normalized(String(row[field] || '')).includes(search));
   });
+}
+
+export function salesAudit(rows) {
+  const states = Object.values(status).map(name => ({ name, orders: 0, cents: 0 }));
+  const byStatus = new Map(states.map(row => [row.name, row]));
+  for (const order of rows) {
+    const row = byStatus.get(order.status);
+    if (row) {
+      row.orders++;
+      row.cents += order.total;
+    }
+  }
+  return states;
 }
 
 export function filterRows(rows, params, fields) {

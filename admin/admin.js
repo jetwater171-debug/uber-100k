@@ -7,7 +7,7 @@ const details = document.querySelector('#details');
 const groups = [
   ['Operação', ['overview', 'Visão geral'], ['pages', 'Páginas e funil'], ['leads', 'Leads'], ['audience', 'Público'], ['sales', 'Vendas'], ['catalog', 'Catálogo']],
   ['Integrações', ['gateways', 'Gateways PIX'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy e Pushcut'], ['sms', 'SMS e remarketing'], ['queue', 'Fila de testes']],
-  ['Diagnóstico', ['activity', 'Eventos da jornada'], ['navigation', 'Saídas e retornos'], ['security', 'Auditoria e segurança']],
+  ['Diagnóstico', ['activity', 'Eventos da jornada'], ['navigation', 'Saídas e retornos'], ['domains', 'Domínios'], ['security', 'Auditoria e segurança']],
 ];
 const sectionNames = Object.fromEntries(groups.flatMap(([, ...links]) => links));
 const eventTypes = ['PageView', 'ViewContent', 'Lead', 'InitiateCheckout', 'Purchase'];
@@ -159,7 +159,7 @@ function pagination(result) {
 function listView(kind, data) {
   const sales = kind === 'sales';
   const listTitle = sales ? 'Transações simuladas' : 'Sessões do protótipo';
-  const leadFilters = sales ? '' : `<label>Tipo <select name="source"><option value="">Todos</option>
+  const sourceFilter = `<label>Tipo <select name="source"><option value="">Todos</option>
     <option value="tracked"${selected(contexts.source === 'tracked')}>Jornadas acompanhadas</option>
     <option value="sample"${selected(contexts.source === 'sample')}>Amostras</option></select></label>`;
   const filters = sales ? `<label>Gateway <select name="gateway"><option value="">Todos</option>${state.settings.gateways.map(({ name }) =>
@@ -172,12 +172,15 @@ function listView(kind, data) {
       escape(row.status), row.items ? `<button type="button" class="button secondary" data-order="${escape(row.id)}">Ver pedido</button>` : '']
     : [escape(row.name), escape(row.city || '—'), escape(row.origin), escape(row.steps.at(-1)),
       `<button type="button" class="button secondary" data-lead="${escape(row.id)}">Detalhes</button>`]);
-  return title(sectionNames[kind], 'Consulte e exporte registros demonstrativos por período.') + range() + '</div>' +
+  const summary = sales && data.audit ? panel('Auditoria de faturamento simulado', table(['Estado', 'Pedidos', 'Valor total'],
+    data.audit.map(row => [escape(row.name), integer.format(row.orders), money(row.cents)]))) : '';
+  return title(sectionNames[kind], 'Consulte e exporte registros demonstrativos por período.') + range() + '</div><div class="stack">' +
+    summary +
     panel(listTitle, `<form id="filters" class="controls">
-      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}${leadFilters}
+      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}${sourceFilter}
       <button class="button primary" type="submit">Filtrar</button>
       <a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind }))}">Exportar CSV</a>
-      </form>` + table(columns, rows) + pagination(data), data.limited ? 'Últimos 1.000 eventos acompanhados' : '');
+      </form>` + table(columns, rows) + pagination(data), data.limited ? 'Últimos 1.000 eventos acompanhados' : '') + '</div>';
 }
 
 function gatewayView(data) {
@@ -191,6 +194,9 @@ function gatewayView(data) {
     [escape(row.name), integer.format(row.orders), integer.format(row.paid), money(row.revenue)]);
   return title('Gateways PIX', 'Configure a ordem e gere comprovantes de teste dos seis gateways.') + range() + '</div><div class="stack">' +
     panel('Prioridade dos gateways', table(['Ordem', 'Gateway', 'Modo de teste', 'Ações'], rows), 'Simulação') +
+    panel('Consulta de transação', `<form class="controls" id="transaction-lookup">
+      <label>Pedido ou código PIX de teste<input name="reference" required maxlength="100"></label>
+      <button type="submit" class="button secondary">Consultar</button></form>`) +
     (state.settings.compareGateways ? panel('Desempenho das jornadas de teste', table(['Gateway', 'Pedidos com PIX', 'Confirmados', 'Valor confirmado em teste'], gatewaySales)) : '') +
     '</div>';
 }
@@ -207,7 +213,11 @@ function catalogView() {
 function trackingCards(channels) {
   return channels.map(channel => panel(channel, `<div class="checks">${eventTypes.map(event =>
     `<label><input type="checkbox" data-event="${event}" data-key="${channel}"${checked(state.settings.tracking[channel].includes(event))}>${event}</label>`).join('')}</div>
-    <div class="control-row"><button type="button" class="button secondary" data-integration="${channel}">Enfileirar teste</button></div>`, 'Simulação')).join('');
+    <form class="controls diagnostic-form" data-channel="${channel}">
+      <label>Cenário de teste<select name="mode">${(state.diagnostics?.[channel] || []).map(mode =>
+        `<option>${escape(mode)}</option>`).join('')}</select></label>
+      <button type="submit" class="button secondary">Enfileirar teste</button>
+    </form>`, 'Simulação')).join('');
 }
 
 function queueView() {
@@ -217,6 +227,29 @@ function queueView() {
   return title('Fila de testes', 'Acompanhe os eventos dos pedidos e processe lotes de até 20 registros.') +
     `<button class="button primary" type="button" id="process-queue"${waiting ? '' : ' disabled'}>Processar fila</button></div>` +
     panel('Histórico da fila', table(['Canal', 'Evento', 'Origem', 'Estado', 'Tentativas', 'Processado em'], records), `${waiting} aguardando`);
+}
+
+function domainsView(domains) {
+  const checkedPages = new Map();
+  for (const check of domains.checks) {
+    const name = domains.pages[check.domainPage];
+    checkedPages.set(name, (checkedPages.get(name) || 0) + 1);
+  }
+  return title('Domínios', 'Teste a validação de origem que protege as solicitações do painel.') + '</div><div class="stack">' +
+    panel('Origem do painel', `<p>${escape(domains.origin)}</p>
+      <form id="domain-check" class="controls diagnostic-form">
+        <label>Página<select name="page">${Object.entries(domains.pages).map(([id, name]) =>
+          `<option value="${escape(id)}">${escape(name)}</option>`).join('')}</select></label>
+        <label>Origem simulada<select name="candidate">
+          <option value="current">Origem do painel</option>
+          <option value="test">${escape(domains.testOrigin)}</option>
+        </select></label>
+        <button type="submit" class="button secondary">Verificar origem</button>
+      </form>`, 'Simulação') +
+    '<div class="columns">' + panel('Testes por página', bars([...checkedPages].map(([name, count]) => ({ name, count })))) +
+    panel('Histórico de verificações', table(['Quando', 'Página', 'Domínio', 'Resultado'], domains.checks.map(row =>
+      [date.format(new Date(row.at)), escape(domains.pages[row.domainPage]), escape(row.detail), escape(row.status)]))) +
+    '</div></div>';
 }
 
 function pendingRemarketing() {
@@ -246,7 +279,7 @@ async function render() {
   try {
     const response = await api('view', undefined, { section: active });
     if (current !== sequence || !operator) return;
-    const { data, traffic, journey } = response;
+    const { data, traffic, journey, domains } = response;
     state = response.state;
     const placeholderHistory = (state.audit || []).filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
     const renderers = {
@@ -260,9 +293,10 @@ async function render() {
         panel('Etapas percorridas', bars(data.funnel), 'Amostra') + '</div>',
       leads: () => listView('leads', data),
       sales: () => listView('sales', data),
-      audience: () => title('Público', 'Agrupamentos das sessões de exemplo com vendas confirmadas em teste.') + range() + '</div><div class="columns">' +
+      audience: () => title('Público', 'Agrupamentos das sessões de exemplo com vendas confirmadas em teste.') +
+        `<div class="controls">${range()}<a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind: 'audience' }))}">Exportar público CSV</a></div></div><div class="columns">` +
         panel('Cidades', bars(data.audience.city)) + panel('Origens', bars(data.audience.origin)) +
-        panel('Aparelhos', bars(data.audience.device)) + '</div>',
+        panel('Aparelhos', bars(data.audience.device)) + panel('Posicionamentos', bars(data.audience.placement || [])) + '</div>',
       catalog: catalogView,
       gateways: () => gatewayView(data),
       tracking: () => title('Tracking', 'Configure a matriz de eventos para validar o fluxo em simulação.') + '</div><div class="columns">' + trackingCards(['Meta','TikTok']) + '</div>',
@@ -281,6 +315,7 @@ async function render() {
         '<div class="columns">' + panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
           traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões de teste`) +
         panel('Retornos por página', bars(journey.returns), journey.limited ? 'Últimos 1.000 eventos' : '') + '</div>',
+      domains: () => domainsView(domains),
       security: () => title('Auditoria e segurança', 'Histórico das mudanças feitas por operadores neste painel.') + '</div>' +
         panel('Atividade do painel', auditTable(state.audit)),
     };
@@ -398,6 +433,18 @@ view.addEventListener('submit', async event => {
     finally { event.submitter.disabled = false; }
     return;
   }
+  if (form.id === 'transaction-lookup' || form.matches('.diagnostic-form')) {
+    try {
+      if (form.id === 'transaction-lookup') {
+        await showOrder(entries.reference);
+      } else if (form.id === 'domain-check') {
+        await command('domain-check', entries.page, entries.candidate);
+      } else {
+        await command('integration-test', form.dataset.channel, entries.mode || undefined);
+      }
+    } catch (error) { notice(error.message, true); }
+    return;
+  }
   if (form.matches('.catalog-form')) {
     try { await command('catalog', form.dataset.product, { cents: Math.round(Number(entries.amount) * 100), active: entries.active === 'on' }); }
     catch (error) { notice(error.message, true); await render(); }
@@ -441,7 +488,6 @@ view.addEventListener('click', async event => {
     if (button.dataset.reminder) await command('order-reminder', button.dataset.reminder);
     if (button.dataset.page) { contexts.page = Number(button.dataset.page); await render(); }
     if (button.dataset.priority) await command('priority', button.dataset.key, Number(button.dataset.priority));
-    if (button.dataset.integration) await command('integration-test', button.dataset.integration);
     if (button.dataset.pix) {
       const result = await command('pix', button.dataset.pix);
       showDetails('PIX de teste', `<p class="muted">Identificador de simulação para ${escape(result.detail)}.</p>

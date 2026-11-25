@@ -267,6 +267,8 @@ test('PIX reconciliation records purchase once and processes pending jobs idempo
   const order = await created.json();
   await command('order-reconcile', order.id, 'confirm', 409);
   const first = await command('order-payment', order.id, '');
+  const lookup = await request('order', { query: { id: first.result.code } });
+  assert.equal((await lookup.json()).order.id, order.id);
   const repeated = await command('order-payment', order.id, first.result.detail);
   assert.equal(repeated.result.code, first.result.code);
   await command('order-reconcile', order.id, 'confirm');
@@ -350,6 +352,39 @@ test('reports support search, period, pagination and CSV in the same environment
   assert.match(data.headers.get('Content-Disposition'), /vendas-teste.csv/);
   assert.match(await data.text(), /Pedido|PED-/);
   assert.match(csv([{ field: '=1+1' }], [['Cabeçalho', 'field']]), /"'=1\+1"/);
+});
+
+test('sales audit and audience exports use the selected source without disclosing sample identities', async () => {
+  const { request, login } = fixture();
+  await login();
+  const sale = await request('demo-order', { body: { items: ['camera'], session: sessionId, requestId: sessionId } });
+  assert.equal(sale.status, 201);
+  const list = await (await request('view', { query: { section: 'sales', source: 'tracked' } })).json();
+  assert.equal(list.data.total, 1);
+  assert.deepEqual(list.data.audit.find(row => row.name === status.awaiting),
+    { name: status.awaiting, orders: 1, cents: 3990 });
+  const samples = await (await request('sales', { query: { source: 'sample' } })).json();
+  assert(samples.items.every(row => row.id.startsWith('PED-')));
+  const csv = await (await request('export', { query: { kind: 'audience' } })).text();
+  assert.match(csv, /placement/);
+  assert.doesNotMatch(csv, /SIM-\d+|Motorista de teste/);
+});
+
+test('diagnoses supported integration scenarios and records simulated origin checks', async () => {
+  const { request, login } = fixture();
+  await login();
+  const command = (type, key, value, version) => request('command', { body: { type, key, value, version } });
+  assert.equal((await command('integration-test', 'Meta', 'Torpedo de voz', 0)).status, 400);
+  const diagnostic = await (await command('integration-test', 'SMSMais', 'Torpedo de voz', 0)).json();
+  assert.equal(diagnostic.state.queue[0].event, 'Torpedo de voz');
+  assert.equal((await command('domain-check', 'regiao', 'https://outside.example', 1)).status, 400);
+  await command('domain-check', 'regiao', 'current', 1);
+  await command('domain-check', 'analise', 'test', 2);
+  const { domains } = await (await request('view', { query: { section: 'domains' } })).json();
+  assert.equal(domains.origin, origin);
+  assert.deepEqual(domains.checks.map(row => [row.domainPage, row.status]), [
+    ['analise', 'Origem rejeitada no teste'], ['regiao', 'Origem aceita no teste'],
+  ]);
 });
 
 test('tracked sessions can be filtered, exported and opened with their own orders', async () => {
