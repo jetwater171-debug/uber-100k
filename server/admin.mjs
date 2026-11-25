@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { channels, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports } from './reports.mjs';
 import { HttpError } from './errors.mjs';
+import { createDemoOrder, paymentForOrder, processQueue, queueReminder, queueTest, reconcileOrder, uuid } from './operations.mjs';
 
 function json(data, status = 200, headers = {}) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
@@ -38,7 +39,7 @@ async function body(request) {
   return data;
 }
 
-function amend(state, command) {
+function amend(state, command, at) {
   const { type, key, value } = command;
   switch (type) {
     case 'feature':
@@ -76,15 +77,31 @@ function amend(state, command) {
       return { title: 'PIX de teste', detail: key, code: `SIMULACAO-${randomUUID()}`, status: 'Simulado · sem cobrança' };
     case 'integration-test':
       if (!channels.includes(key)) break;
-      return { title: 'Teste em simulação', detail: key, status: 'Simulado · sem envio externo' };
+      return queueTest(state, key, at);
+    case 'queue-process':
+      return processQueue(state, at);
+    case 'order-payment':
+      return paymentForOrder(state, key, value, at);
+    case 'order-reconcile':
+      return reconcileOrder(state, key, value, at);
+    case 'order-reminder':
+      return queueReminder(state, key, at);
   }
   throw new HttpError(400, 'Ação inválida para esta configuração.');
 }
 
 const trackedPages = ['inicio', 'oferta', 'cadastro', 'questionario', 'regiao', 'analise'];
-const sessionId = /^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/iu;
 const leadFields = ['id', 'name', 'city', 'origin', 'device'];
 const saleFields = ['id', 'sessionId', 'gateway'];
+
+async function saveOperation(store, state, result, operator, at) {
+  const previous = state.version;
+  const entry = { ...result, at, actor: operator.id };
+  state.audit = [entry, ...state.audit].slice(0, 100);
+  state.version++;
+  if (!await store.save(previous, state)) throw new HttpError(409, 'O painel mudou. Atualize e tente novamente.');
+  return entry;
+}
 
 export function adminHandler({ auth, store, now = Date.now }) {
   return async request => {
@@ -103,28 +120,41 @@ export function adminHandler({ auth, store, now = Date.now }) {
         return json({ ok: true }, 200, { 'Set-Cookie': await auth.logout(request) });
       }
       const operator = await auth.verify(request);
+      const at = new Date(now()).toISOString();
       if (request.method === 'POST' && route === 'traffic') {
         const { page, session } = await body(request);
-        if (!trackedPages.includes(page) || typeof session !== 'string' || !sessionId.test(session)) {
+        if (!trackedPages.includes(page) || typeof session !== 'string' || !uuid.test(session)) {
           throw new HttpError(400, 'Evento de teste inválido.');
         }
-        await store.recordTraffic({ page, session, day: new Date(now()).toISOString().slice(0, 10) });
+        await store.recordTraffic({ page, session, day: at.slice(0, 10) });
         return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+      }
+      if (request.method === 'POST' && route === 'demo-order') {
+        const data = await body(request);
+        const state = await store.read();
+        const { order, created } = createDemoOrder(state, data, at);
+        if (created) await saveOperation(store, state, { title: 'Pedido de jornada de teste', detail: order.id }, operator, at);
+        return json({ id: order.id, total: order.total, status: order.status }, created ? 201 : 200);
       }
       if (request.method === 'POST' && route === 'command') {
         const command = await body(request);
         const state = await store.read();
         if (command.version !== state.version) throw new HttpError(409, 'O painel mudou. Atualize e tente novamente.');
-        const entry = { ...amend(state, command), at: new Date(now()).toISOString(), actor: operator.id };
-        state.audit = [entry, ...state.audit].slice(0, 100);
-        state.version++;
-        if (!await store.save(command.version, state)) throw new HttpError(409, 'O painel mudou. Atualize e tente novamente.');
+        const entry = await saveOperation(store, state, amend(state, command, at), operator, at);
         return json({ state, result: entry });
       }
       if (request.method !== 'GET') throw new HttpError(404, 'Rota indisponível.');
       if (route === 'session') return json({ operator, prototype: true });
       if (route === 'settings') return json(await store.read());
-      const data = reports(url.searchParams, now());
+      const supported = ['traffic', 'overview', 'leads', 'sales', 'lead', 'order', 'export'];
+      if (!supported.includes(route)) throw new HttpError(404, 'Rota indisponível.');
+      if (route === 'order') {
+        const order = (await store.read()).orders.find(entry => entry.id === url.searchParams.get('id'));
+        if (!order) throw new HttpError(404, 'Pedido de teste indisponível.');
+        return json({ order });
+      }
+      const orders = ['overview', 'sales', 'export'].includes(route) ? (await store.read()).orders : [];
+      const data = reports(url.searchParams, now(), orders);
       if (route === 'traffic') {
         const since = data.daily[0].day;
         const visits = await store.readTraffic(since);
@@ -134,7 +164,7 @@ export function adminHandler({ auth, store, now = Date.now }) {
         })), limit: visits.length >= 1000 });
       }
       if (route === 'overview') {
-        const { leads, orders, ...overview } = data;
+        const { leads, orders: transactions, ...overview } = data;
         return json(overview);
       }
       if (route === 'leads') return json(filterRows(data.leads, url.searchParams, leadFields));

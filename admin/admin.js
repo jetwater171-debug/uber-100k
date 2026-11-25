@@ -6,11 +6,12 @@ const view = document.querySelector('#view');
 const details = document.querySelector('#details');
 const groups = [
   ['Operação', ['overview', 'Visão geral'], ['pages', 'Páginas e funil'], ['leads', 'Leads'], ['audience', 'Público'], ['sales', 'Vendas'], ['catalog', 'Catálogo']],
-  ['Integrações', ['gateways', 'Gateways PIX'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy e Pushcut'], ['sms', 'SMS e remarketing']],
+  ['Integrações', ['gateways', 'Gateways PIX'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy e Pushcut'], ['sms', 'SMS e remarketing'], ['queue', 'Fila de testes']],
   ['Diagnóstico', ['navigation', 'Saídas por etapa'], ['security', 'Auditoria e segurança']],
 ];
 const sectionNames = Object.fromEntries(groups.flatMap(([, ...links]) => links));
 const eventTypes = ['PageView', 'ViewContent', 'Lead', 'InitiateCheckout', 'Purchase'];
+const orderStatuses = ['Aguardando PIX de teste', 'Pendente no teste', 'Pago no teste', 'Cancelado no teste'];
 const trackedLabels = {
   inicio: 'Página inicial', oferta: 'Sobre a oferta', cadastro: 'Cadastro',
   questionario: 'Questionário', regiao: 'Disponibilidade por região', analise: 'Análise e ofertas',
@@ -115,7 +116,9 @@ function dashboard(data) {
     ].map(([label, value]) => metric(label, value)).join('') + '</div>' +
     '<div class="columns">' + panel('Funil da campanha', bars(data.funnel), 'Amostra') +
     panel('Visitas por dia', bars(data.daily.slice(-7).map(item => ({ name: item.day.slice(5).split('-').reverse().join('/'), count: item.visits })))) +
-    '</div>' + '<div class="stack dashboard-controls">' + panel('Controles da demonstração', [
+    '</div>' + '<div class="stack dashboard-controls">' + panel('Jornadas registradas neste painel',
+      '<div class="cards">' + metric('Pedidos de jornada', integer.format(counts.testOrders)) +
+      metric('Confirmados em teste', integer.format(counts.testPaid)) + '</div>') + panel('Controles da demonstração', [
       ['compareGateways', 'Comparar gateways'], ['offerExtras', 'Exibir acessórios no catálogo de teste'],
     ].map(([id, label]) => `<label class="control-row checkbox"><span>${label}</span>
       <input type="checkbox" data-change="feature" data-key="${id}"${checked(state.settings[id])}></label>`).join('')) + '</div>';
@@ -133,11 +136,12 @@ function listView(kind, data) {
   const listTitle = sales ? 'Transações simuladas' : 'Cadastros de teste';
   const filters = sales ? `<label>Gateway <select name="gateway"><option value="">Todos</option>${state.settings.gateways.map(({ name }) =>
     `<option${selected(name === contexts.gateway)}>${escape(name)}</option>`).join('')}</select></label>
-    <label>Estado <select name="status"><option value="">Todos</option>${['Pago no teste', 'Pendente no teste'].map(status =>
+    <label>Estado <select name="status"><option value="">Todos</option>${orderStatuses.map(status =>
       `<option${selected(status === contexts.status)}>${status}</option>`).join('')}</select></label>` : '';
-  const columns = sales ? ['Pedido', 'Gateway', 'Valor', 'Estado'] : ['Cadastro', 'Cidade', 'Origem', 'Última etapa', ''];
+  const columns = sales ? ['Pedido', 'Origem', 'Gateway', 'Valor', 'Estado', ''] : ['Cadastro', 'Cidade', 'Origem', 'Última etapa', ''];
   const rows = data.items.map(row => sales
-    ? [escape(row.id), escape(row.gateway), money(row.total), escape(row.status)]
+    ? [escape(row.id), row.items ? 'Jornada acompanhada' : 'Amostra', escape(row.gateway || '—'), money(row.total),
+      escape(row.status), row.items ? `<button type="button" class="button secondary" data-order="${escape(row.id)}">Ver pedido</button>` : '']
     : [escape(row.name), escape(row.city), escape(row.origin), escape(row.steps.at(-1)),
       `<button type="button" class="button secondary" data-lead="${escape(row.id)}">Detalhes</button>`]);
   return title(sectionNames[kind], 'Consulte e exporte registros demonstrativos por período.') + range() + '</div>' +
@@ -175,7 +179,26 @@ function catalogView() {
 function trackingCards(channels) {
   return channels.map(channel => panel(channel, `<div class="checks">${eventTypes.map(event =>
     `<label><input type="checkbox" data-event="${event}" data-key="${channel}"${checked(state.settings.tracking[channel].includes(event))}>${event}</label>`).join('')}</div>
-    <div class="control-row"><button type="button" class="button secondary" data-integration="${channel}">Executar teste local</button></div>`, 'Simulação')).join('');
+    <div class="control-row"><button type="button" class="button secondary" data-integration="${channel}">Enfileirar teste</button></div>`, 'Simulação')).join('');
+}
+
+function queueView() {
+  const waiting = state.queue.filter(item => item.status === 'Aguardando teste').length;
+  const records = state.queue.map(item => [escape(item.channel), escape(item.event), escape(item.detail), escape(item.status), item.attempts,
+    item.processedAt ? date.format(new Date(item.processedAt)) : '—']);
+  return title('Fila de testes', 'Acompanhe os eventos dos pedidos e processe lotes de até 20 registros.') +
+    `<button class="button primary" type="button" id="process-queue"${waiting ? '' : ' disabled'}>Processar fila</button></div>` +
+    panel('Histórico da fila', table(['Canal', 'Evento', 'Origem', 'Estado', 'Tentativas', 'Processado em'], records), `${waiting} aguardando`);
+}
+
+function pendingRemarketing() {
+  const reminders = new Set(state.queue.filter(job => job.event === 'Remarketing').map(job => job.detail));
+  const rows = state.orders.filter(order => order.status === orderStatuses[1]).map(order => [
+    escape(order.id), escape(order.gateway), money(order.total),
+    `<button class="button secondary" type="button" data-reminder="${escape(order.id)}"${reminders.has(order.id) ? ' disabled' : ''}>
+      ${reminders.has(order.id) ? 'Lembrete registrado' : 'Enfileirar lembrete de teste'}</button>`,
+  ]);
+  return panel('Pedidos da jornada com PIX pendente', table(['Pedido', 'Gateway', 'Valor', 'Ação'], rows), 'Simulação');
 }
 
 async function render() {
@@ -212,7 +235,9 @@ async function render() {
       utmfy: () => title('UTMfy e Pushcut', 'Valide eventos e notificações com registros de teste.') + '</div><div class="stack">' +
         '<div class="columns">' + trackingCards(['UTMfy','Pushcut']) + '</div>' + panel('Histórico de testes', auditTable(placeholderHistory.filter(entry => entry.detail !== 'SMSMais'))) + '</div>',
       sms: () => title('SMS e remarketing', 'Teste o registro de eventos da integração em modo de demonstração.') + '</div><div class="stack">' +
-        trackingCards(['SMSMais']) + panel('Histórico de testes', auditTable(placeholderHistory.filter(entry => entry.detail === 'SMSMais'))) + '</div>',
+        pendingRemarketing() + trackingCards(['SMSMais']) +
+        panel('Histórico de testes', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' || entry.title === 'Lembrete de teste registrado'))) + '</div>',
+      queue: queueView,
       navigation: () => title('Saídas por etapa', 'Consulte o abandono observado nas jornadas de exemplo.') + range() + '</div>' +
         panel('Principais saídas', bars(data.funnel.map(row => ({ name: row.name, count: row.departures })))),
       security: () => title('Auditoria e segurança', 'Histórico das mudanças feitas por operadores neste painel.') + '</div>' +
@@ -237,8 +262,50 @@ async function command(type, key, value) {
 function showDetails(titleText, content) {
   document.querySelector('#details-title').textContent = titleText;
   document.querySelector('#details-content').innerHTML = content;
-  details.showModal();
+  if (!details.open) details.showModal();
 }
+
+async function showOrder(id) {
+  const response = await fetch(`/api/admin?${params({ route: 'order', id })}`);
+  if (!response.ok) throw new Error('Pedido de teste indisponível.');
+  const { order } = await response.json();
+  const enabled = state.settings.gateways.filter(entry => entry.enabled);
+  let actions = '';
+  if (order.status === orderStatuses[0]) {
+    actions = `<div class="controls"><label>Gateway <select id="order-gateway"><option value="">Usar prioridade configurada</option>${enabled.map(entry =>
+      `<option>${escape(entry.name)}</option>`).join('')}</select></label>
+      <button type="button" class="button primary" data-order-action="order-payment" data-id="${escape(id)}"${enabled.length ? '' : ' disabled'}>Gerar PIX de teste</button></div>`;
+  } else if (order.status === orderStatuses[1]) {
+    actions = `<div class="controls">
+      <button type="button" class="button primary" data-order-action="order-reconcile" data-outcome="confirm" data-id="${escape(id)}">Simular confirmação</button>
+      <button type="button" class="button secondary" data-order-action="order-reconcile" data-outcome="cancel" data-id="${escape(id)}">Simular cancelamento</button></div>`;
+  }
+  showDetails('Pedido de teste', `<p class="empty">${escape(order.id)}</p>
+    ${table(['Produto', 'Preço registrado'], order.items.map(item => [escape(item.name), money(item.cents)]))}
+    <p class="empty"><strong>${money(order.total)}</strong> · ${escape(order.status)}</p>
+    ${order.payment ? `<p class="empty">${escape(order.gateway)} · ${escape(order.payment.code)}</p>` : ''}
+    ${actions}<p id="order-feedback" class="empty" role="status" hidden></p>`);
+}
+
+details.addEventListener('click', async event => {
+  const button = event.target.closest('button[data-order-action]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const { orderAction, id, outcome } = button.dataset;
+    await command(orderAction, id, outcome || document.querySelector('#order-gateway')?.value || '');
+    if (details.open) await showOrder(id);
+  } catch (error) {
+    const message = document.querySelector('#order-feedback');
+    if (message) {
+      message.textContent = error.message;
+      message.hidden = false;
+    }
+    await render();
+  } finally {
+    button.disabled = false;
+  }
+});
 
 loginForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -301,6 +368,9 @@ view.addEventListener('click', async event => {
   if (!button) return;
   try {
     if (button.id === 'refresh-tracking') await render();
+    if (button.id === 'process-queue') await command('queue-process');
+    if (button.dataset.order) await showOrder(button.dataset.order);
+    if (button.dataset.reminder) await command('order-reminder', button.dataset.reminder);
     if (button.dataset.page) { contexts.page = Number(button.dataset.page); await render(); }
     if (button.dataset.priority) await command('priority', button.dataset.key, Number(button.dataset.priority));
     if (button.dataset.integration) await command('integration-test', button.dataset.integration);

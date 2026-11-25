@@ -698,6 +698,9 @@
 .approved-dialog h2 { font-size: 23px; }
 .approved-dialog-note { margin-block: 9px 13px; color: #525358; font-size: 13px; }
 .approved-dialog .primary-action { width: 100%; min-height: 44px; font-size: 16px; }
+.approved-demo-order { display: grid; gap: 6px; margin-bottom: 9px; }
+.approved-demo-order[hidden] { display: none; }
+.approved-demo-link { justify-self: center; font-size: 14px; font-weight: 650; }
 
 @media (max-height: 740px) {
   .approved-page { gap: 5px; padding-top: 6px; }

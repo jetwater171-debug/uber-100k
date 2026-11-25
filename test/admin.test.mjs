@@ -87,6 +87,78 @@ test('tracking counts actual demo navigation once per day, with a private bounde
   assert.equal(rows.find(row => row.page === 'cadastro').count, 1);
 });
 
+test('journey orders use server prices and an idempotent request key', async () => {
+  const { request, login } = fixture();
+  const data = { items: ['camera', 'powerbank'], session: sessionId, requestId: sessionId, total: 1 };
+  assert.equal((await request('demo-order', { body: data })).status, 401);
+  await login();
+  const created = await request('demo-order', { body: data });
+  assert.equal(created.status, 201);
+  const order = await created.json();
+  assert.equal(order.total, 7580);
+  const repeated = await request('demo-order', { body: { ...data, items: [...data.items].reverse() } });
+  assert.equal(repeated.status, 200);
+  assert.deepEqual(await repeated.json(), order);
+  assert.equal((await request('demo-order', { body: { ...data, items: ['camera'] } })).status, 409);
+  assert.equal((await request('demo-order', { body: { ...data, items: ['powerbank'] } })).status, 400);
+  const sales = await (await request('sales', { query: { q: order.id } })).json();
+  assert.equal(sales.items.length, 1);
+  assert.equal(sales.items[0].id, order.id);
+});
+
+test('PIX reconciliation records purchase once and processes pending jobs idempotently', async () => {
+  const { request, login } = fixture();
+  await login();
+  let version = 0;
+  const command = async (type, key, value, expected = 200) => {
+    const result = await request('command', { body: { type, key, value, version } });
+    assert.equal(result.status, expected);
+    if (result.ok) version++;
+    return result.json();
+  };
+  await command('tracking', 'Meta', ['InitiateCheckout', 'Purchase']);
+  const created = await request('demo-order', { body: { session: sessionId, requestId: sessionId, items: ['camera'] } });
+  assert.equal(created.status, 201);
+  version++;
+  const order = await created.json();
+  await command('order-reconcile', order.id, 'confirm', 409);
+  const first = await command('order-payment', order.id, '');
+  const repeated = await command('order-payment', order.id, first.result.detail);
+  assert.equal(repeated.result.code, first.result.code);
+  await command('order-reconcile', order.id, 'confirm');
+  await command('order-reconcile', order.id, 'confirm');
+  await command('order-reconcile', order.id, 'cancel', 409);
+  const processed = await command('queue-process');
+  assert.deepEqual(processed.state.queue.map(job => [job.event, job.attempts]),
+    [['Purchase', 1], ['InitiateCheckout', 1]]);
+  assert(processed.state.queue.every(job => job.status === 'Processado no teste'));
+  const again = await command('queue-process');
+  assert.equal(again.result.detail, '0 registros');
+  const overview = await (await request('overview')).json();
+  assert.equal(overview.counts.testOrders, 1);
+  assert.equal(overview.counts.testPaid, 1);
+});
+
+test('a pending reminder is deduplicated and canceled after payment reconciliation', async () => {
+  const { request, login } = fixture();
+  await login();
+  const created = await request('demo-order', { body: { session: sessionId, requestId: sessionId, items: ['camera'] } });
+  const order = await created.json();
+  async function command(type, version, value) {
+    return request('command', { body: { type, key: order.id, version, value } });
+  }
+  assert.equal((await command('order-reminder', 1)).status, 409);
+  assert.equal((await command('order-payment', 1, '')).status, 200);
+  assert.equal((await command('order-reminder', 2)).status, 200);
+  const repeated = await (await command('order-reminder', 3)).json();
+  assert.equal(repeated.state.queue.length, 1);
+  const confirmed = await (await command('order-reconcile', 4, 'confirm')).json();
+  assert.equal(confirmed.state.queue[0].status, 'Cancelado no teste');
+  const processed = await (await command('queue-process', 5)).json();
+  assert.equal(processed.state.queue[0].attempts, 0);
+  assert.equal((await command('order-reminder', 6)).status, 409);
+});
+
 test('reports support search, period, pagination and CSV in the same environment', async () => {
   const { request, login } = fixture();
   await login();

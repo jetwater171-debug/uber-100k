@@ -14,6 +14,10 @@ const approvedAction = document.getElementById('approved-action');
 const selectionDialog = document.getElementById('selection-dialog');
 const selectionItems = document.getElementById('selection-items');
 const selectionTotal = document.getElementById('selection-total');
+const demoOrder = document.getElementById('demo-order');
+const demoOrderCreate = document.getElementById('demo-order-create');
+const demoOrderResult = document.getElementById('demo-order-result');
+const demoOrderLink = document.getElementById('demo-order-link');
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const percent = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 });
 
@@ -28,6 +32,7 @@ function selectedOffers() {
   return Array.from(offerList.querySelectorAll('.approved-option:checked'), option => {
     const card = option.closest('.approved-card');
     return {
+      id: option.value,
       name: card.querySelector('strong').textContent,
       cents: Number(card.querySelector('data.approved-price').value),
     };
@@ -55,7 +60,25 @@ approvedAction.addEventListener('click', () => {
   });
   selectionItems.replaceChildren(...rows);
   selectionTotal.textContent = approvedTotal.textContent;
+  demoOrder.hidden = !window.campaignDemo;
+  demoOrderResult.hidden = true;
+  demoOrderLink.hidden = true;
   selectionDialog.showModal();
+});
+
+demoOrderCreate.addEventListener('click', async () => {
+  demoOrderCreate.disabled = true;
+  demoOrderResult.hidden = false;
+  demoOrderResult.textContent = 'Salvando pedido de teste…';
+  try {
+    const order = await window.campaignDemo.createOrder(selectedOffers().map(offer => offer.id));
+    demoOrderResult.textContent = `Pedido de teste salvo · ${currency.format(order.total / 100)}`;
+    demoOrderLink.hidden = false;
+  } catch (error) {
+    demoOrderResult.textContent = error.message;
+  } finally {
+    demoOrderCreate.disabled = false;
+  }
 });
 
 const checks = [

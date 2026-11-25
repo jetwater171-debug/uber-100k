@@ -23,6 +23,8 @@ export function initialState() {
     },
     catalog,
     audit: [],
+    orders: [],
+    queue: [],
   };
 }
 

@@ -24,6 +24,22 @@
     }
   } catch { return; }
   if (!session?.id) return;
+  const createOrder = async items => {
+    if (session.until <= Date.now()) throw new Error('Abra uma nova jornada de teste pelo painel.');
+    const selection = [...items].sort().join(',');
+    session.orders ||= {};
+    const requestId = session.orders[selection] ||= crypto.randomUUID();
+    sessionStorage.setItem(key, JSON.stringify(session));
+    const response = await fetch('/api/admin?route=demo-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, requestId, session: session.id }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Pedido de teste indisponível.');
+    return data;
+  };
+  window.campaignDemo = Object.freeze({ createOrder });
   fetch('/api/admin?route=traffic', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

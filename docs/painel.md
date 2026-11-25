@@ -1,12 +1,16 @@
 # Painel da campanha
 
-O painel tem doze seções. Visão geral, funil, cadastros, público, vendas, catálogo, gateways PIX, tracking, UTMfy e Pushcut, SMS, saídas por etapa e auditoria. O [inventário do iFoodbag](auditoria-admin.md) lista o comportamento original e as dependências.
+O painel tem treze seções. Visão geral, funil, cadastros, público, vendas, catálogo, gateways PIX, tracking, UTMfy e Pushcut, SMS, fila de testes, saídas por etapa e auditoria. O [inventário do iFoodbag](auditoria-admin.md) lista o comportamento original e as dependências.
 
 ## Abrir no computador
 
 Com Node.js 24 instalado, execute `npm run dev` na pasta do projeto e abra [o painel local](http://127.0.0.1:4280/admin). Use **Abrir painel de teste**. A sessão e as mudanças de configuração são mantidas em memória durante essa execução. **Páginas e funil → Abrir jornada com tracking** abre o site e registra a passagem pelas seis páginas. Volte ao painel e use **Atualizar** para consultar as contagens. O tracking identifica apenas a sessão de teste e a página visitada.
 
-Em **Gateways PIX**, os seis testes geram identificadores de simulação e entradas de auditoria. Os controles de Meta, TikTok, UTMfy, Pushcut e SMSMais validam a configuração e registram testes localmente. Os estados dos pedidos e os dados dos relatórios comerciais são exemplos.
+Na jornada acompanhada, selecione os produtos e use **Criar pedido de teste** no resumo. O servidor registra o preço vigente do catálogo de teste e usa uma chave por seleção para impedir pedidos duplicados em tentativas repetidas.
+
+Em **Vendas → Ver pedido**, gere um PIX de teste em um gateway ativo e simule a confirmação ou o cancelamento. A origem **Jornada acompanhada** identifica os pedidos criados no fluxo. Os demais registros são amostras. Os seis gateways emitem identificadores de simulação sem valor de cobrança. Os eventos do pedido entram na **Fila de testes** conforme a configuração de cada canal e podem ser processados em lotes de até vinte. A confirmação repetida mantém uma única entrada de compra por canal. Os testes de Meta, TikTok, UTMfy, Pushcut e SMSMais também podem ser enfileirados manualmente.
+
+Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente. A fila mantém um lembrete por pedido e cancela o lembrete pendente se o PIX encerrar antes do processamento. O histórico fica disponível na mesma seção e na auditoria.
 
 ## Publicar o painel autenticado
 
@@ -20,5 +24,5 @@ Configurações ausentes mantêm o painel hospedado indisponível. A persistênc
 
 ## Verificações locais
 
-- `npm test` verifica sessão, controle de origem, conflito entre alterações, tracking, relatórios, exportação, testes PIX e os contratos do adaptador Supabase.
+- `npm test` verifica sessão, controle de origem, concorrência, tracking, relatórios, exportação, testes PIX, pedidos da jornada, reconciliação, deduplicação da fila e os contratos do adaptador Supabase.
 - `npm run build` gera a publicação estática em `dist`.

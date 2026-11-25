@@ -48,7 +48,7 @@ export function supabaseStore({ url, secret, fetch }) {
     async read() {
       const [entry] = await request('id=eq.main&select=revision,snapshot&limit=1');
       if (!entry) throw new HttpError(503, 'A migração do painel ainda não foi aplicada.');
-      return entry.snapshot ? { ...entry.snapshot, version: entry.revision } : initialState();
+      return { ...initialState(), ...entry.snapshot, version: entry.revision };
     },
     async save(expected, next) {
       const rows = await request(`id=eq.main&revision=eq.${expected}&select=revision`, {

@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#000000">
   <title>Análise do perfil | Uber Driver</title>
   <link rel="stylesheet" href="styles.css?v=44">
-  <link rel="stylesheet" href="analise.css?v=32">
+  <link rel="stylesheet" href="analise.css?v=33">
   <script src="fluxo.js?v=1" defer></script>
-  <script src="analise.js?v=16" defer></script>
-  <script src="demo-tracking.js?v=1" defer></script>
+  <script src="analise.js?v=17" defer></script>
+  <script src="demo-tracking.js?v=2" defer></script>
 </head>
 <body class="review-screen">
   <header class="site-header">
@@ -111,7 +111,7 @@
       <ul class="approved-list" id="ofertas" aria-labelledby="offers-heading" role="list">
         <li>
           <label class="approved-card approved-card-required">
-            <input class="approved-option sr-only" type="checkbox" checked disabled aria-labelledby="offer-camera" aria-describedby="price-camera discount-camera offer-required">
+            <input class="approved-option sr-only" type="checkbox" value="camera" checked disabled aria-labelledby="offer-camera" aria-describedby="price-camera discount-camera offer-required">
             <span class="approved-thumb approved-thumb-camera">
               <span class="approved-discount" id="discount-camera"></span>
               <span class="approved-photo-frame">
@@ -132,7 +132,7 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-suporte" aria-describedby="price-suporte discount-suporte">
+            <input class="approved-option sr-only" type="checkbox" value="suporte" aria-labelledby="offer-suporte" aria-describedby="price-suporte discount-suporte">
             <span class="approved-thumb">
               <span class="approved-discount" id="discount-suporte"></span>
               <span class="approved-photo-frame">
@@ -152,7 +152,7 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-compressor" aria-describedby="price-compressor discount-compressor">
+            <input class="approved-option sr-only" type="checkbox" value="compressor" aria-labelledby="offer-compressor" aria-describedby="price-compressor discount-compressor">
             <span class="approved-thumb">
               <span class="approved-discount" id="discount-compressor"></span>
               <span class="approved-photo-frame">
@@ -172,7 +172,7 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-tablet" aria-describedby="price-tablet discount-tablet">
+            <input class="approved-option sr-only" type="checkbox" value="tablet" aria-labelledby="offer-tablet" aria-describedby="price-tablet discount-tablet">
             <span class="approved-thumb approved-thumb-tablet">
               <span class="approved-discount" id="discount-tablet"></span>
               <span class="approved-photo-frame">
@@ -192,7 +192,7 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-capa-bancos" aria-describedby="price-capa-bancos discount-capa-bancos">
+            <input class="approved-option sr-only" type="checkbox" value="capa" aria-labelledby="offer-capa-bancos" aria-describedby="price-capa-bancos discount-capa-bancos">
             <span class="approved-thumb">
               <span class="approved-discount" id="discount-capa-bancos"></span>
               <span class="approved-photo-frame">
@@ -212,7 +212,7 @@
         </li>
         <li>
           <label class="approved-card">
-            <input class="approved-option sr-only" type="checkbox" aria-labelledby="offer-powerbank" aria-describedby="price-powerbank discount-powerbank">
+            <input class="approved-option sr-only" type="checkbox" value="powerbank" aria-labelledby="offer-powerbank" aria-describedby="price-powerbank discount-powerbank">
             <span class="approved-thumb">
               <span class="approved-discount" id="discount-powerbank"></span>
               <span class="approved-photo-frame">
@@ -253,6 +253,11 @@
     <ul class="approved-dialog-items" id="selection-items"></ul>
     <p class="approved-dialog-total"><span>Total da promoção</span><strong id="selection-total"></strong></p>
     <p class="approved-dialog-note">Seleção demonstrativa do protótipo.</p>
+    <div class="approved-demo-order" id="demo-order" hidden>
+      <button class="primary-action" id="demo-order-create" type="button">Criar pedido de teste</button>
+      <p class="approved-dialog-note" id="demo-order-result" role="status" hidden></p>
+      <a class="approved-demo-link" id="demo-order-link" href="/admin#sales" hidden>Ver pedidos no painel</a>
+    </div>
     <form method="dialog">
       <button class="primary-action" autofocus>Voltar à seleção</button>
     </form>

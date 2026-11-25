@@ -10,13 +10,14 @@ function normalized(text) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
 
-export function reports(params, now = Date.now()) {
+export function reports(params, now = Date.now(), journeyOrders = []) {
   const { sessions, orders } = demoData(now);
   const days = [7, 14, 30].includes(Number(params.get('days'))) ? Number(params.get('days')) : 7;
   const cutoff = now - days * 86400000;
   const visits = sessions.filter(row => Date.parse(row.createdAt) > cutoff);
   const transactions = orders.filter(row => Date.parse(row.createdAt) > cutoff);
   const paid = transactions.filter(order => order.status === 'Pago no teste');
+  const realTests = journeyOrders.filter(order => Date.parse(order.createdAt) > cutoff);
   const paidSessions = new Set(paid.map(order => order.sessionId));
   const paidAudience = visits.filter(session => paidSessions.has(session.id));
   const steps = stages.map(name => ({ name, count: visits.filter(row => row.steps.includes(name)).length }));
@@ -47,6 +48,8 @@ export function reports(params, now = Date.now()) {
       orders: transactions.length,
       paid: paid.length,
       revenue: paid.reduce((total, order) => total + order.total, 0),
+      testOrders: realTests.length,
+      testPaid: realTests.filter(order => order.status === 'Pago no teste').length,
     },
     daily,
     funnel,
@@ -62,7 +65,7 @@ export function reports(params, now = Date.now()) {
         revenue: confirmed.reduce((sum, row) => sum + row.total, 0) };
     }),
     leads: visits.filter(row => row.steps.includes('Cadastro')),
-    orders: transactions,
+    orders: [...realTests, ...transactions],
   };
 }
 
