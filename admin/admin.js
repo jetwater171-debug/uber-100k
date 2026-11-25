@@ -197,12 +197,20 @@ function queueView() {
 
 function pendingRemarketing() {
   const reminders = new Set(state.queue.filter(job => job.event === 'Remarketing').map(job => job.detail));
-  const rows = state.orders.filter(order => order.status === orderStatuses[1]).map(order => [
-    escape(order.id), escape(order.gateway), money(order.total),
-    `<button class="button secondary" type="button" data-reminder="${escape(order.id)}"${(order.reminderQueuedAt || reminders.has(order.id)) ? ' disabled' : ''}>
-      ${(order.reminderQueuedAt || reminders.has(order.id)) ? 'Lembrete registrado' : 'Enfileirar lembrete de teste'}</button>`,
-  ]);
-  return panel('Pedidos da jornada com PIX pendente', table(['Pedido', 'Gateway', 'Valor', 'Ação'], rows), 'Simulação');
+  const pending = state.orders.filter(order => order.status === orderStatuses[1]);
+  const rows = pending.map(order => {
+    const queued = order.reminderQueuedAt || reminders.has(order.id);
+    return [
+      queued ? '—' : `<input type="checkbox" name="reminder" value="${escape(order.id)}" aria-label="Selecionar pedido ${escape(order.id)}">`,
+      escape(order.id), escape(order.gateway), money(order.total),
+      queued ? 'Lembrete registrado' : `<button class="button secondary" type="button" data-reminder="${escape(order.id)}">Enfileirar lembrete</button>`,
+    ];
+  });
+  const actions = pending.some(order => !order.reminderQueuedAt && !reminders.has(order.id)) ?
+    '<div class="controls"><button class="button primary" type="submit">Enfileirar selecionados</button>' +
+    '<button class="button secondary" type="button" id="select-reminders">Selecionar até 20</button></div>' : '';
+  return panel('Pedidos da jornada com PIX pendente',
+    '<form id="reminder-batch">' + actions + table(['Selecionar', 'Pedido', 'Gateway', 'Valor', 'Ação'], rows) + '</form>', 'Simulação');
 }
 
 async function render() {
@@ -238,7 +246,8 @@ async function render() {
         '<div class="columns">' + trackingCards(['UTMfy','Pushcut']) + '</div>' + panel('Histórico de testes', auditTable(placeholderHistory.filter(entry => entry.detail !== 'SMSMais'))) + '</div>',
       sms: () => title('SMS e remarketing', 'Teste o registro de eventos da integração em modo de demonstração.') + '</div><div class="stack">' +
         pendingRemarketing() + trackingCards(['SMSMais']) +
-        panel('Histórico de testes', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' || entry.title === 'Lembrete de teste registrado'))) + '</div>',
+        panel('Histórico de testes', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' ||
+          ['Lembrete de teste registrado', 'Lembretes de teste em lote'].includes(entry.title)))) + '</div>',
       queue: queueView,
       navigation: () => title('Saídas por etapa', 'Veja até onde as sessões acompanhadas avançaram no período.') + range() + '</div>' +
         panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
@@ -342,6 +351,15 @@ view.addEventListener('submit', async event => {
     await render();
     return;
   }
+  if (form.id === 'reminder-batch') {
+    const ids = new FormData(form).getAll('reminder');
+    if (!ids.length || ids.length > 20) { notice('Selecione de 1 a 20 pedidos pendentes.', true); return; }
+    event.submitter.disabled = true;
+    try { await command('order-reminders', null, ids); }
+    catch (error) { notice(error.message, true); await render(); }
+    finally { event.submitter.disabled = false; }
+    return;
+  }
   if (form.matches('.catalog-form')) {
     try { await command('catalog', form.dataset.product, { cents: Math.round(Number(entries.amount) * 100), active: entries.active === 'on' }); }
     catch (error) { notice(error.message, true); await render(); }
@@ -372,6 +390,10 @@ view.addEventListener('click', async event => {
   try {
     if (button.id === 'refresh-tracking') await render();
     if (button.id === 'process-queue') await command('queue-process');
+    if (button.id === 'select-reminders') {
+      const boxes = [...button.form.querySelectorAll('input[name="reminder"]')];
+      boxes.forEach((box, index) => { box.checked = index < 20; });
+    }
     if (button.dataset.order) await showOrder(button.dataset.order);
     if (button.dataset.reminder) await command('order-reminder', button.dataset.reminder);
     if (button.dataset.page) { contexts.page = Number(button.dataset.page); await render(); }

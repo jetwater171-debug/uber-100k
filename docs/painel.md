@@ -10,7 +10,7 @@ Na jornada acompanhada, a lista de produtos aplica os preços e a disponibilidad
 
 Em **Vendas → Ver pedido**, gere um PIX de teste em um gateway ativo e simule a confirmação ou o cancelamento. A origem **Jornada acompanhada** identifica os pedidos criados no fluxo. Os demais registros são amostras. Os seis gateways emitem identificadores de simulação sem valor de cobrança. Os eventos do pedido entram na **Fila de testes** conforme a configuração de cada canal e podem ser processados em lotes de até vinte. A confirmação repetida mantém uma única entrada de compra por canal. Os testes de Meta, TikTok, UTMfy, Pushcut e SMSMais também podem ser enfileirados manualmente.
 
-Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente. A fila mantém um lembrete por pedido e cancela o lembrete pendente se o PIX encerrar antes do processamento. O histórico fica disponível na mesma seção e na auditoria.
+Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente ou selecione até 20 e enfileire o lote. A fila mantém um lembrete por pedido e cancela o lembrete pendente se o PIX encerrar antes do processamento. O histórico fica disponível na mesma seção e na auditoria.
 
 **Gateways PIX** mostra os pedidos registrados com PIX de teste, as confirmações e o valor confirmado nas jornadas acompanhadas. **Saídas por etapa** mostra a etapa mais avançada registrada para cada sessão no período selecionado.
 

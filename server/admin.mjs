@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { channels, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports } from './reports.mjs';
 import { HttpError } from './errors.mjs';
-import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueTest, reconcileOrder, uuid } from './operations.mjs';
+import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueReminders, queueTest, reconcileOrder, uuid } from './operations.mjs';
 
 function json(data, status = 200, headers = {}) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
@@ -86,6 +86,8 @@ function amend(state, command, at) {
       return reconcileOrder(state, key, value, at);
     case 'order-reminder':
       return queueReminder(state, key, at);
+    case 'order-reminders':
+      return queueReminders(state, value, at);
   }
   throw new HttpError(400, 'Ação inválida para esta configuração.');
 }

@@ -127,16 +127,33 @@ export function queueTest(state, channel, at) {
   return { title: 'Teste enfileirado', detail: channel, status: 'Simulação' };
 }
 
-export function queueReminder(state, id, at) {
+function addReminder(state, id, at) {
   const order = findOrder(state, id);
   if (order.status !== status.pending) throw new HttpError(409, 'Somente pedidos de teste pendentes entram no remarketing.');
-  if (!order.reminderQueuedAt) {
-    enqueue(state, {
-      id: `${id}/SMSMais/Remarketing`, channel: 'SMSMais', event: 'Remarketing', detail: id, at,
-    });
-    order.reminderQueuedAt = at;
-  }
+  if (order.reminderQueuedAt) return false;
+  const key = `${id}/SMSMais/Remarketing`;
+  const existing = state.queue.find(job => job.id === key);
+  if (!existing) enqueue(state, { id: key, channel: 'SMSMais', event: 'Remarketing', detail: id, at });
+  order.reminderQueuedAt = existing?.createdAt || at;
+  return !existing;
+}
+
+export function queueReminder(state, id, at) {
+  addReminder(state, id, at);
   return { title: 'Lembrete de teste registrado', detail: id, status: 'Simulação' };
+}
+
+export function queueReminders(state, ids, at) {
+  if (!Array.isArray(ids) || !ids.length || ids.length > 20 || ids.some(id => typeof id !== 'string')) {
+    throw new HttpError(400, 'Selecione de 1 a 20 pedidos pendentes.');
+  }
+  let queued = 0;
+  for (const id of new Set(ids)) if (addReminder(state, id, at)) queued++;
+  return {
+    title: 'Lembretes de teste em lote',
+    detail: queued === 1 ? '1 lembrete novo' : `${queued} lembretes novos`,
+    status: 'Simulação',
+  };
 }
 
 export function processQueue(state, at) {

@@ -284,6 +284,36 @@ test('a pending reminder is deduplicated and canceled after payment reconciliati
   assert.equal((await command('order-reminder', 6)).status, 409);
 });
 
+test('a reminder batch validates pending orders, saves atomically and deduplicates retries', async () => {
+  const { request, login } = fixture();
+  await login();
+  let version = 0;
+  const command = async (type, key, value) => {
+    const response = await request('command', { body: { type, key, value, version } });
+    if (response.ok) version++;
+    return response;
+  };
+  const ids = [];
+  for (const requestId of [sessionId, '015379c9-c724-4c57-9aa4-f32cdc3049cd']) {
+    const response = await request('demo-order', { body: { session: sessionId, requestId, items: ['camera'] } });
+    assert.equal(response.status, 201);
+    version++;
+    const { id } = await response.json();
+    ids.push(id);
+    assert.equal((await command('order-payment', id, '')).status, 200);
+  }
+  assert.equal((await command('order-reminders', null, [ids[0], 'missing-order'])).status, 404);
+  const previous = await (await request('settings')).json();
+  assert.equal(previous.queue.length, 0);
+  assert.equal(previous.orders.some(order => order.reminderQueuedAt), false);
+  const accepted = await (await command('order-reminders', null, ids)).json();
+  assert.equal(accepted.result.detail, '2 lembretes novos');
+  assert.equal(accepted.state.queue.length, 2);
+  const repeated = await (await command('order-reminders', null, ids)).json();
+  assert.equal(repeated.result.detail, '0 lembretes novos');
+  assert.equal(repeated.state.queue.length, 2);
+});
+
 test('reports support search, period, pagination and CSV in the same environment', async () => {
   const { request, login } = fixture();
   await login();
