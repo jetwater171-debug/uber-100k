@@ -160,8 +160,14 @@ export function queueReminders(state, ids, at) {
   };
 }
 
-export function processQueue(state, at) {
-  const batch = state.queue.filter(entry => entry.status === 'Aguardando teste').slice(-20);
+export const queueGroups = {
+  utmfy: ['UTMfy', 'Pushcut'],
+  sms: ['SMSMais'],
+};
+
+export function processQueue(state, at, scope) {
+  const group = queueGroups[scope];
+  const batch = state.queue.filter(entry => entry.status === 'Aguardando teste' && (!group || group.includes(entry.channel))).slice(-20);
   for (const job of batch) {
     job.status = 'Processado no teste';
     job.attempts++;

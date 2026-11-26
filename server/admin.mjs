@@ -1,11 +1,12 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { siteSessionHandler } from './site-session.mjs';
+import { reportRowLimit } from './store.mjs';
 import { amendIntegrationPreview } from './integration-preview.mjs';
 import { channels, diagnosticModes, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports, salesAudit } from './reports.mjs';
 import { HttpError } from './errors.mjs';
 import { journeyPages, journeyTitle, summarizeJourney } from './journey.mjs';
-import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueReminders, queueTest, reconcileOrder, status, uuid } from './operations.mjs';
+import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueGroups, queueNavigationEvents, queueReminder, queueReminders, queueTest, reconcileOrder, status, uuid } from './operations.mjs';
 
 function json(data, status = 200, headers = {}) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
@@ -129,7 +130,8 @@ function amend(state, command, at, siteOrigin) {
         configuredFields: Object.keys(state.settings.integrationPreview?.[key] || {}).length,
       };
     case 'queue-process':
-      return processQueue(state, at);
+      if (value != null && !Object.hasOwn(queueGroups, value)) break;
+      return processQueue(state, at, value);
     case 'order-payment':
       return paymentForOrder(state, key, value, at);
     case 'order-reconcile':
@@ -154,8 +156,8 @@ function amend(state, command, at, siteOrigin) {
 }
 
 const trackedPages = Object.keys(journeyPages);
-const leadFields = ['id', 'name', 'origin', 'orderId'];
-const saleFields = ['id', 'sessionId', 'gateway'];
+const leadFields = ['id', 'name', 'origin', 'orderReferences'];
+const saleFields = ['id', 'sessionId', 'gateway', 'payment.code'];
 const sections = ['overview', 'pages', 'leads', 'audience', 'sales', 'catalog', 'gateways',
   'tracking', 'activity', 'utmfy', 'sms', 'queue', 'navigation', 'domains', 'security'];
 
@@ -166,12 +168,14 @@ async function trafficReport(store, since, until) {
   const sessionsByPage = new Map(trackedPages.map(page => [page, new Set()]));
   const stageByPage = new Map(trackedPages.map((page, index) => [page, index]));
   const furthestStageBySession = new Map();
+  let lastActivity;
   for (const row of visits) {
     counts.set(row.page, (counts.get(row.page) || 0) + 1);
     dayCounts.set(row.day, (dayCounts.get(row.day) || 0) + 1);
     sessionsByPage.get(row.page).add(row.session);
     const stage = stageByPage.get(row.page);
     if (stage > (furthestStageBySession.get(row.session) ?? -1)) furthestStageBySession.set(row.session, stage);
+    if (row.occurred_at && (!lastActivity || Date.parse(row.occurred_at) > Date.parse(lastActivity))) lastActivity = row.occurred_at;
   }
   const stageCounts = Array(trackedPages.length).fill(0);
   for (const stage of furthestStageBySession.values()) stageCounts[stage]++;
@@ -182,7 +186,8 @@ async function trafficReport(store, since, until) {
     sessions: furthestStageBySession.size,
     pageViews: visits.length,
     daily: Array.from(dayCounts, ([day, count]) => ({ day, count })).sort((first, next) => first.day.localeCompare(next.day)),
-    limit: visits.length >= 1000,
+    limit: visits.length >= reportRowLimit,
+    lastActivity,
   };
 }
 
@@ -195,11 +200,11 @@ async function viewReport(store, params, time, siteOrigin) {
   if (['utmfy', 'sms', 'security'].includes(section)) state.audit = snapshot.audit;
   if (['tracking', 'utmfy', 'sms'].includes(section)) state.diagnostics = diagnosticModes;
   if (section === 'sms') {
-    state.orders = snapshot.orders.filter(order => order.status === 'Pendente no teste');
-    state.queue = snapshot.queue.filter(job => job.event === 'Remarketing');
+    state.orders = snapshot.orders.filter(order => order.status === status.pending);
+    state.queue = snapshot.queue.filter(job => queueGroups.sms.includes(job.channel));
   }
   if (section === 'queue') state.queue = snapshot.queue;
-  if (section === 'utmfy') state.queue = snapshot.queue.filter(job => ['UTMfy', 'Pushcut'].includes(job.channel));
+  if (section === 'utmfy') state.queue = snapshot.queue.filter(job => queueGroups.utmfy.includes(job.channel));
   if (section === 'domains') return {
     state,
     domains: {
@@ -219,7 +224,7 @@ async function viewReport(store, params, time, siteOrigin) {
       { name: 'ViewContent', count: traffic.rows.find(row => row.page === 'oferta').count },
       { name: 'Lead', count: events.filter(row => row.event === 'profile_submitted').length },
       { name: 'InitiateCheckout', count: events.filter(row => row.event === 'selection_opened').length },
-    ], limited: traffic.limit || events.length >= 1000 };
+    ], limited: traffic.limit || events.length >= reportRowLimit };
   }
   if (['catalog', 'utmfy', 'sms', 'queue', 'security'].includes(section)) return { state };
 
@@ -255,7 +260,10 @@ async function viewReport(store, params, time, siteOrigin) {
         paid: records.filter(order => confirmed(order) && order.resolvedAt?.startsWith(today)).length };
     }) : undefined;
     return { state, data: {
-      ...overview, lastActivity: events[0]?.occurred_at, dailyGatewaySales,
+      ...overview,
+      lastActivity: [events[0]?.occurred_at, traffic.lastActivity].filter(Boolean)
+        .toSorted((first, next) => Date.parse(next) - Date.parse(first))[0],
+      dailyGatewaySales,
       funnel: { postal: reached('lookup_resolved'), selection: reached('selection_opened'),
         paid: new Set(orders.filter(order => order.status === status.paid).map(order => order.sessionId)).size },
     }, traffic };
@@ -286,13 +294,17 @@ function trackedLead(id, visits) {
 
 async function leadRecords(store, orders, since, until) {
   const latestBySession = new Map();
+  const referencesBySession = new Map();
   for (const order of orders) {
     const previous = latestBySession.get(order.sessionId);
     if (!previous || order.createdAt > previous.createdAt) latestBySession.set(order.sessionId, order);
+    if (!referencesBySession.has(order.sessionId)) referencesBySession.set(order.sessionId, []);
+    referencesBySession.get(order.sessionId).push(order.id, order.payment?.code);
   }
   const includeOrder = row => {
     const latest = latestBySession.get(row.id);
-    return { ...row, orderId: latest?.id, total: latest?.total, gateway: latest?.gateway || '', status: latest?.status || '' };
+    return { ...row, orderId: latest?.id, total: latest?.total, gateway: latest?.gateway || '', status: latest?.status || '',
+      orderReferences: referencesBySession.get(row.id)?.filter(Boolean) || [] };
   };
   const visits = await store.readTraffic(since, undefined, until);
   const bySession = new Map();
@@ -303,7 +315,7 @@ async function leadRecords(store, orders, since, until) {
   const rows = Array.from(bySession, ([id, pages]) => trackedLead(id, pages))
     .sort((first, next) => next.updatedOn.localeCompare(first.updatedOn) ||
       (next.updatedAt || '').localeCompare(first.updatedAt || '') || first.id.localeCompare(next.id));
-  return { rows: rows.map(includeOrder), limited: visits.length >= 1000 };
+  return { rows: rows.map(includeOrder), limited: visits.length >= reportRowLimit };
 }
 
 async function saveOperation(store, state, result, operator, at) {

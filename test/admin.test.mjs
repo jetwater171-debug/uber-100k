@@ -546,6 +546,62 @@ test('ported forms save independent simulation profiles and reject real endpoint
   assert.equal((await request('view', { query: { section: 'tracking' }, auth: false })).status, 401);
 });
 
+test('integration queues process only their own channels', async () => {
+  const { request, login } = fixture();
+  await login();
+  const command = (type, key, value, version) => request('command', { body: { type, key, value, version } });
+  assert.equal((await command('integration-test', 'SMSMais', 'SMS de teste', 0)).status, 200);
+  assert.equal((await command('integration-test', 'UTMfy', 'PIX gerado', 1)).status, 200);
+  assert.equal((await command('integration-test', 'Meta', 'Pixel', 2)).status, 200);
+  const utmfy = await (await command('queue-process', null, 'utmfy', 3)).json();
+  assert.equal(utmfy.state.queue.find(row => row.channel === 'UTMfy').status, 'Processado no teste');
+  assert.equal(utmfy.state.queue.find(row => row.channel === 'SMSMais').status, 'Aguardando teste');
+  const sms = await (await command('queue-process', null, 'sms', 4)).json();
+  assert.equal(sms.state.queue.find(row => row.channel === 'SMSMais').status, 'Processado no teste');
+  assert.equal(sms.state.queue.find(row => row.channel === 'Meta').status, 'Aguardando teste');
+  assert.equal((await command('queue-process', null, 'outside', 5)).status, 400);
+});
+
+test('finds Lead and Sales rows by the PIX code of an earlier order', async () => {
+  const { request, login } = fixture();
+  await login();
+  await request('traffic', { body: { page: 'inicio', session: sessionId } });
+  const first = await (await request('demo-order', { body: { session: sessionId, requestId: sessionId, items: ['camera'] } })).json();
+  const payment = await (await request('command', { body: { type: 'order-payment', key: first.id,
+    value: 'ClownPay', version: 1 } })).json();
+  const code = payment.result.code;
+  const next = await request('demo-order', {
+    body: { session: sessionId, requestId: '901579c9-c724-4c57-9aa4-f32cdc3049cb', items: ['camera', 'capa'] },
+  });
+  assert.equal(next.status, 201);
+  const leads = await (await request('leads', { query: { q: code.toLowerCase(), page: '400' } })).json();
+  assert.equal(leads.total, 1);
+  assert.equal(leads.page, 1);
+  assert.equal(leads.items[0].id, sessionId);
+  const sales = await (await request('sales', { query: { q: code } })).json();
+  assert.deepEqual(sales.items.map(row => row.id), [first.id]);
+  const exported = await (await request('export', { query: { kind: 'leads', q: code } })).text();
+  assert.match(exported, new RegExp(sessionId));
+});
+
+test('Supabase reporting reads all available pages within its row cap', async () => {
+  const offsets = [];
+  const store = supabaseStore({
+    url: 'https://fake-db.example',
+    secret: 'sb_secret_fake',
+    fetch: async url => {
+      const offset = Number(url.searchParams.get('offset'));
+      offsets.push(offset);
+      assert.equal(url.searchParams.get('reporting_visible'), 'is.true');
+      assert.equal(url.searchParams.getAll('day').length, 2);
+      return Response.json(Array.from({ length: offset ? 7 : 1000 }, (_, index) => ({ index: offset + index })));
+    },
+  });
+  assert.equal((await store.readTraffic('2026-11-01', undefined, '2026-11-25')).length, 1007);
+  assert.equal((await store.readJourneyEvents('2026-11-01', sessionId, '2026-11-25')).length, 1007);
+  assert.deepEqual(offsets, [0, 1000, 0, 1000]);
+});
+
 test('Supabase store checks login limits and sends compare-and-swap and deduplicated insert requests', async () => {
   const requests = [];
   const store = supabaseStore({

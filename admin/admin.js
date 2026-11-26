@@ -34,6 +34,8 @@ const moneyFormat = new Intl.NumberFormat('pt-BR', { style: 'currency', currency
 const integer = new Intl.NumberFormat('pt-BR');
 const date = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const contexts = { days: 'all', from: '', to: '', q: '', page: 1, gateway: '', status: '' };
+const rowLimitNotice = 'Limite de registros atingido. Reduza o período para ver a contagem completa.';
+let reminderSearch = '';
 const dashboardControls = [
   ['compareGateways', 'Comparar gateways'],
   ['offerExtras', 'Exibir acessórios no catálogo de teste'],
@@ -233,7 +235,7 @@ function dashboard(data, traffic) {
       <div class="admin-hero-highlight"><span>Sessões registradas</span><strong>${integer.format(traffic.sessions)}</strong><em>No período</em></div>
     </div>
     ${dateToolbar()}
-    <div class="overview-period"><p class="muted">Período: ${escape(periodLabel)}${traffic.limit ? ' · últimos 1.000 registros' : ''}</p>
+    <div class="overview-period"><p class="muted">Período: ${escape(periodLabel)}${traffic.limit ? ' · ' + rowLimitNotice : ''}</p>
       <button type="button" class="button secondary" id="live-refresh" aria-pressed="${liveRefresh}">Atualização automática</button></div>
     <div class="admin-kpi-grid">
       ${steps.toReversed().map(([label, count, description]) => kpi(label, integer.format(count), description)).join('')}
@@ -260,9 +262,9 @@ function dashboard(data, traffic) {
       </div>
     </section>
     <div class="stack dashboard-controls">
-      ${panel('Conversão por gateway', table(['Gateway', 'PIX de teste', 'Confirmados', 'Conversão', 'Valor confirmado'], journeyGatewaySales.map(row => [
+      ${state.settings.compareGateways ? panel('Conversão por gateway', table(['Gateway', 'PIX de teste', 'Confirmados', 'Conversão', 'Valor confirmado'], journeyGatewaySales.map(row => [
         escape(row.name), integer.format(row.orders), integer.format(row.paid), ratio(row.paid, row.orders) + '%', money(row.revenue),
-      ])))}
+      ]))) : ''}
       ${panel('Controle do funil', '<form id="dashboard-settings">' + dashboardControls.map(([id, label]) =>
         `<label class="control-row checkbox"><span>${label}</span><input type="checkbox" data-dashboard-setting="${id}"${checked(pendingSettings[id] ?? state.settings[id])}></label>`).join('') + '</form>')}
       ${panel('Gateways PIX', '<a class="button secondary" href="#gateways">Configurar gateways</a>')}
@@ -384,12 +386,12 @@ function listView(kind, data) {
   return (sales ? salesOverview(data) : '') + '<div class="stack">' +
     panel(listTitle, `<form id="filters" class="controls admin-toolbar">
       ${sales ? '' : range()}
-      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="${sales ? 'Pedido ou sessão' : 'Sessão ou ID do pedido'}"></label>${filters}
+      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Sessão, pedido ou código PIX"></label>${filters}
       <button class="button secondary" type="submit">Filtrar</button>
       <a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind }))}">Exportar CSV</a>
       ${sales ? '' : '<button class="button secondary" type="button" id="refresh-leads">Atualizar</button><button class="button secondary" type="button" id="lookup-leads">Consultar transações</button>'}
       </form><div class="admin-table-wrap">` + table(columns, rows, sales ? undefined : data.items) + '</div>' + pagination(data),
-      data.limited ? 'Últimos 1.000 eventos acompanhados' : integer.format(data.total)) + summary + '</div>';
+      integer.format(data.total)) + (data.limited ? `<p class="muted">${rowLimitNotice}</p>` : '') + summary + '</div>';
 }
 
 function updateGatewayView(focus) {
@@ -418,9 +420,10 @@ function moveGateway(name, targetIndex, direction) {
 }
 
 function catalogView() {
-  const items = state.settings.offerExtras ? state.catalog : state.catalog.filter(item => item.id === 'camera');
+  const items = state.catalog;
   return title('Catálogo', 'Edite valores e disponibilidade do catálogo de teste.') + '</div>' +
-    panel('Produtos', items.map(item => `<form class="control-row catalog-form" data-product="${escape(item.id)}">
+    panel('Produtos', (state.settings.offerExtras ? '' : '<p class="integration-hint">Os acessórios estão ocultos na oferta. Você ainda pode editá-los aqui.</p>') +
+    items.map(item => `<form class="control-row catalog-form" data-product="${escape(item.id)}">
       <strong>${escape(item.name)}</strong><label>Preço em reais <input name="amount" type="number" step=".01" min="1" max="10000" value="${(item.cents / 100).toFixed(2)}" required></label>
       <label class="checkbox"><input type="checkbox" name="active"${checked(item.active)}>Disponível</label>
       <button type="submit" class="button secondary">Salvar</button></form>`).join(''));
@@ -452,9 +455,13 @@ function utmfyView() {
     panel('Teste rápido', diagnosticButtons('UTMfy', [['PIX gerado', 'Testar PIX gerado'], ['PIX pago', 'Testar PIX pago']])) +
     panel('Venda manual', diagnosticButtons('UTMfy', [['Venda manual', 'Enfileirar simulação']]), 'Simulação') +
     panel('Pushcut', integrationForms.Pushcut + channelSettings('Pushcut') + diagnosticButtons('Pushcut', [['PIX gerado', 'Testar PIX gerado'], ['PIX pago', 'Testar PIX pago']]), 'Simulação') +
-    panel('Fila backend', '<button id="process-queue" class="button secondary" type="button">Processar fila agora</button>' + table(['Canal', 'Evento', 'Estado', 'Tentativas'], state.queue.map(item =>
+    panel('Fila backend', `<button id="process-queue" data-queue-scope="utmfy" class="button secondary" type="button"${hasQueueWork() ? '' : ' disabled'}>Processar fila agora</button>` + table(['Canal', 'Evento', 'Estado', 'Tentativas'], state.queue.map(item =>
       [escape(item.channel), escape(item.event), escape(item.status), item.attempts])),
     `${state.queue.length} registros`);
+}
+
+function hasQueueWork() {
+  return state.queue.some(item => item.status === 'Aguardando teste');
 }
 
 function queueView() {
@@ -491,12 +498,14 @@ function domainsView(domains) {
 
 function pendingRemarketing() {
   const reminders = new Set(state.queue.filter(job => job.event === 'Remarketing').map(job => job.detail));
-  const pending = state.orders.filter(order => order.status === orderStatuses[1]);
+  const pending = state.orders.filter(order => [order.id, order.gateway, order.payment?.code]
+    .some(value => String(value || '').toLowerCase().includes(reminderSearch)));
   const rows = pending.map(order => {
     const queued = order.reminderQueuedAt || reminders.has(order.id);
     return [
       queued ? '—' : `<input type="checkbox" name="reminder" value="${escape(order.id)}" aria-label="Selecionar pedido ${escape(order.id)}">`,
-      escape(order.id), escape(order.gateway), money(order.total),
+      `<button class="lead-link" type="button" data-order="${escape(order.id)}">${escape(order.id)}</button>`,
+      escape(order.gateway), money(order.total),
       queued ? 'Lembrete registrado' : `<button class="button secondary" type="button" data-reminder="${escape(order.id)}">Enfileirar lembrete</button>`,
     ];
   });
@@ -504,7 +513,11 @@ function pendingRemarketing() {
     '<div class="controls"><button class="button primary" type="submit">Enfileirar selecionados</button>' +
     '<button class="button secondary" type="button" id="select-reminders">Selecionar até 20</button></div>' : '';
   return panel('Pedidos da jornada com PIX pendente',
-    '<form id="reminder-batch">' + actions + table(['Selecionar', 'Pedido', 'Gateway', 'Valor', 'Ação'], rows) + '</form>', 'Simulação');
+    `<form id="sms-filter" class="controls admin-toolbar">
+      <label>Buscar pedido <input name="q" type="search" maxlength="100" placeholder="Pedido, gateway ou código PIX" value="${escape(reminderSearch)}"></label>
+      <button class="button secondary" type="submit">Buscar</button>
+      <button class="button secondary" id="refresh-sms" type="button">Atualizar lista</button>
+    </form><form id="reminder-batch">` + actions + table(['Selecionar', 'Pedido', 'Gateway', 'Valor', 'Ação'], rows) + '</form>', 'Simulação');
 }
 
 function smsView() {
@@ -518,6 +531,9 @@ function smsView() {
     panel('Webhook de entrega e respostas', diagnosticButtons('SMSMais', [['Retorno de entrega', 'Simular retorno de entrega']])) +
     panel('Remarketing automático', integrationForms['SMSMais remarketing'], 'Prévia') +
     pendingRemarketing() +
+    panel('Fila do SMSMais', `<button id="process-queue" class="button secondary" data-queue-scope="sms" type="button"${hasQueueWork() ? '' : ' disabled'}>Processar fila agora</button>` +
+      table(['Evento', 'Referência', 'Estado', 'Criado em'], state.queue.map(item =>
+        [escape(item.event), escape(item.detail), escape(item.status), date.format(new Date(item.createdAt))])), 'Simulação') +
     panel('Teste de SMS', diagnosticButtons('SMSMais', [['SMS de teste', 'Testar SMS']])) +
     panel('Torpedo de voz', diagnosticButtons('SMSMais', [['Torpedo de voz', 'Testar voz']])) +
     panel('Estado da integração', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' ||
@@ -564,12 +580,12 @@ async function render() {
       audience: () => audienceView(traffic, data),
       catalog: catalogView,
       tracking: () => title('Tracking', 'Configure os eventos e consulte a atividade registrada.') + range() + '</div><div class="stack">' +
-        pixelSettings() + panel('Eventos do site', bars(response.pixel), response.limited ? 'Últimos 1.000 registros por consulta' : 'Medição própria') + '</div>',
+        pixelSettings() + panel('Eventos do site', (response.limited ? `<p class="muted">${rowLimitNotice}</p>` : '') + bars(response.pixel), 'Medição própria') + '</div>',
       utmfy: utmfyView,
       sms: smsView,
       queue: queueView,
       activity: () => title('Eventos da jornada', 'Acompanhe as ações registradas no protótipo, da primeira etapa até a seleção.') + range() + '</div>' +
-        '<div class="stack">' + panel('Marcos registrados', bars(journey.milestones), journey.limited ? 'Últimos 1.000 eventos' : '') +
+        '<div class="stack">' + panel('Marcos registrados', (journey.limited ? `<p class="muted">${rowLimitNotice}</p>` : '') + bars(journey.milestones)) +
         panel('Eventos recentes', table(['Quando', 'Página', 'Evento'], journey.recent.map(row =>
           [date.format(new Date(row.at)), escape(row.page), escape(row.title)]))) + '</div>',
       navigation: () => navigationView(traffic, journey),
@@ -793,6 +809,7 @@ async function onNavigation() {
   shownLocation = current;
   leadDialog.close();
   Object.assign(contexts, { q: '', page: 1, gateway: '', status: '' });
+  reminderSearch = '';
   notice('');
   scheduleRefresh();
   await render();
@@ -837,6 +854,11 @@ view.addEventListener('submit', async event => {
   }
   if (form.id === 'filters') {
     Object.assign(contexts, entries, { page: 1 });
+    await render();
+    return;
+  }
+  if (form.id === 'sms-filter') {
+    reminderSearch = entries.q.trim().toLowerCase();
     await render();
     return;
   }
@@ -924,7 +946,8 @@ view.addEventListener('click', async event => {
     if (button.id === 'refresh-tracking') await render();
     if (button.id === 'refresh-leads' || button.id === 'gateway-refresh') await render();
     if (button.id === 'lookup-leads' || button.id === 'gateway-lookup') openTransactionLookup();
-    if (button.id === 'process-queue') await command('queue-process');
+    if (button.id === 'refresh-sms') await render();
+    if (button.id === 'process-queue') await command('queue-process', null, button.dataset.queueScope);
     if (button.id === 'select-reminders') {
       const boxes = [...button.form.querySelectorAll('input[name="reminder"]')];
       boxes.forEach((box, index) => { box.checked = index < 20; });

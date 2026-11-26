@@ -1,3 +1,5 @@
+import { reportRowLimit } from './store.mjs';
+
 export const journeyPages = {
   inicio: 'Início',
   oferta: 'Sobre a oferta',
@@ -49,5 +51,5 @@ export function summarizeJourney(events) {
   }
   const rank = items => [...items].map(([name, count]) => ({ name, count }))
     .sort((first, next) => next.count - first.count || first.name.localeCompare(next.name));
-  return { milestones: rank(counts), returns: rank(returns), limited: events.length >= 1000 };
+  return { milestones: rank(counts), returns: rank(returns), limited: events.length >= reportRowLimit };
 }

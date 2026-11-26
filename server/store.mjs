@@ -1,6 +1,9 @@
 import { HttpError } from './errors.mjs';
 import { initialState } from './fixtures.mjs';
 
+export const reportRowLimit = 5000;
+const reportPageSize = 1000;
+
 export function memoryStore() {
   let snapshot = initialState();
   const traffic = new Map();
@@ -22,7 +25,10 @@ export function memoryStore() {
       if (!traffic.has(key)) traffic.set(key, event);
     },
     async readTraffic(since, session, until) {
-      return [...traffic.values()].filter(event => event.day >= since && (!until || event.day <= until) && (!session || event.session === session));
+      return [...traffic.values()].filter(event => event.day >= since && (!until || event.day <= until) && (!session || event.session === session))
+        .sort((first, next) => next.day.localeCompare(first.day) ||
+          (next.occurred_at || '').localeCompare(first.occurred_at || '') ||
+          first.session.localeCompare(next.session) || first.page.localeCompare(next.page)).slice(0, reportRowLimit);
     },
     async recordJourneyEvent(event) {
       const key = [event.session, event.page, event.event, event.day].join('/');
@@ -30,7 +36,7 @@ export function memoryStore() {
     },
     async readJourneyEvents(since, session, until) {
       return [...journey.values()].filter(event => event.day >= since && (!until || event.day <= until) && (!session || event.session === session))
-        .sort((first, next) => next.occurred_at.localeCompare(first.occurred_at)).slice(0, 1000);
+        .sort((first, next) => next.occurred_at.localeCompare(first.occurred_at)).slice(0, reportRowLimit);
     },
   };
 }
@@ -57,6 +63,20 @@ export function supabaseStore({ url, secret, fetch }) {
     if (!response.ok) throw new HttpError(503, 'Banco do painel indisponível.');
     const payload = await response.text();
     return payload ? JSON.parse(payload) : null;
+  }
+
+  async function readReport(filters, target) {
+    const rows = [];
+    const startedAt = new Date().toISOString();
+    filters.set('or', `(occurred_at.is.null,occurred_at.lte.${startedAt})`);
+    filters.set('limit', reportPageSize);
+    for (let offset = 0; offset < reportRowLimit; offset += reportPageSize) {
+      filters.set('offset', offset);
+      const page = await request(filters, {}, target);
+      rows.push(...page);
+      if (page.length < reportPageSize) break;
+    }
+    return rows;
   }
 
   return {
@@ -86,11 +106,10 @@ export function supabaseStore({ url, secret, fetch }) {
       }, new URL('/rest/v1/campaign_demo_traffic', url));
     },
     async readTraffic(since, session, until) {
-      const filters = new URLSearchParams({ day: `gte.${since}`, reporting_visible: 'is.true', select: 'page,session,day,occurred_at', order: 'day.desc,occurred_at.desc.nullslast,session,page', limit: 1000 });
+      const filters = new URLSearchParams({ day: `gte.${since}`, reporting_visible: 'is.true', select: 'page,session,day,occurred_at', order: 'day.desc,occurred_at.desc.nullslast,session,page' });
       if (session) filters.set('session', `eq.${session}`);
       if (until) filters.append('day', `lte.${until}`);
-      return request(filters, {},
-        new URL('/rest/v1/campaign_demo_traffic', url));
+      return readReport(filters, new URL('/rest/v1/campaign_demo_traffic', url));
     },
     async recordJourneyEvent(event) {
       await request('on_conflict=session,page,event,day', {
@@ -101,11 +120,11 @@ export function supabaseStore({ url, secret, fetch }) {
     },
     async readJourneyEvents(since, session, until) {
       const filters = new URLSearchParams({
-        day: `gte.${since}`, reporting_visible: 'is.true', select: 'page,event,session,occurred_at', order: 'day.desc,occurred_at.desc', limit: 1000,
+        day: `gte.${since}`, reporting_visible: 'is.true', select: 'page,event,session,occurred_at', order: 'day.desc,occurred_at.desc,session,page,event',
       });
       if (session) filters.set('session', `eq.${session}`);
       if (until) filters.append('day', `lte.${until}`);
-      return request(filters, {}, journey);
+      return readReport(filters, journey);
     },
     async allowLoginAttempt(bucket) {
       const allowed = await request('', {

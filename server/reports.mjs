@@ -77,7 +77,10 @@ export function matchingRows(rows, params, fields) {
     if (gateway && row.gateway !== gateway) return false;
     if (source === 'tracked' && !row.items && row.source !== 'tracked') return false;
     if (source === 'sample' && (row.items || row.source === 'tracked')) return false;
-    return fields.some(field => normalized(String(row[field] || '')).includes(search));
+    return fields.some(field => {
+      const value = field.split('.').reduce((entry, key) => entry?.[key], row);
+      return (Array.isArray(value) ? value : [value]).some(item => normalized(String(item || '')).includes(search));
+    });
   });
 }
 
@@ -97,8 +100,9 @@ export function salesAudit(rows) {
 export function filterRows(rows, params, fields) {
   const match = matchingRows(rows, params, fields);
   const requestedPage = Number(params.get('page'));
-  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 100) : 1;
   const perPage = 12;
+  const page = Number.isInteger(requestedPage) && requestedPage > 0
+    ? Math.min(requestedPage, Math.max(1, Math.ceil(match.length / perPage))) : 1;
   return { items: match.slice((page - 1) * perPage, page * perPage), total: match.length, perPage, page };
 }
 
