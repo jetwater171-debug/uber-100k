@@ -517,6 +517,35 @@ test('gateway routing saves the full priority atomically and tests saved statuse
   assert.match(result.checks[1].code, /^SIMULACAO-/);
 });
 
+test('ported forms save independent simulation profiles and reject real endpoints and raw keys', async () => {
+  const { request, login } = fixture();
+  await login();
+  const command = (type, value, version) => request('command', { body: { type, value, version } });
+  const get = async section => (await request('view', { query: { section } })).json();
+  const start = await get('gateways');
+  const priority = start.state.settings.gateways.toReversed();
+  const rejected = await command('gateway-settings', { priority, profiles: {
+    Sunize: { 'gateway-sunize-base-url': 'https://payments.example.com', 'gateway-sunize-api-key': true },
+  } }, start.state.version);
+  assert.equal(rejected.status, 400);
+  assert.deepEqual((await get('gateways')).state.settings.gateways, start.state.settings.gateways);
+  assert.equal((await command('gateway-settings', { priority, profiles: {
+    Sunize: { 'gateway-sunize-api-key': 'a-real-key' },
+  } }, start.state.version)).status, 400);
+  const saved = await (await command('gateway-settings', { priority, profiles: {
+    Sunize: { 'gateway-sunize-base-url': 'https://sunize.test', 'gateway-sunize-api-key': true },
+    'Bravo Pay': { 'gateway-bravopay-expires-in': '600' },
+  } }, start.state.version)).json();
+  assert.deepEqual(saved.state.settings.integrationPreview.Sunize, {
+    'gateway-sunize-base-url': 'https://sunize.test/', 'gateway-sunize-api-key': true,
+  });
+  assert.deepEqual(saved.state.settings.integrationPreview['Bravo Pay'], { 'gateway-bravopay-expires-in': '600' });
+  const tracking = await command('tracking-settings', { events: {}, profiles: { Meta: { 'pixel-id': '1234' } } }, saved.state.version);
+  assert.equal(tracking.status, 200);
+  assert.equal((await get('tracking')).state.settings.integrationPreview.Meta['pixel-id'], '1234');
+  assert.equal((await request('view', { query: { section: 'tracking' }, auth: false })).status, 401);
+});
+
 test('Supabase store checks login limits and sends compare-and-swap and deduplicated insert requests', async () => {
   const requests = [];
   const store = supabaseStore({

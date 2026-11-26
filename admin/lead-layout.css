@@ -1,0 +1,164 @@
+/* Overlay components adapted from the original iFoodbag admin CSS. */
+.lead-detail-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.lead-detail-kicker {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.lead-detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.lead-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.lead-detail-summary-card {
+    border-radius: 16px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.06);
+    min-height: 88px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.lead-detail-summary-card strong {
+    font-size: 1.08rem;
+    line-height: 1.2;
+    color: #172131;
+    word-break: break-word;
+}
+
+.lead-detail-summary-card span {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+
+.lead-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.lead-detail-section {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+    padding: 16px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
+    min-width: 0;
+}
+
+.lead-detail-section--wide {
+    grid-column: 1 / -1;
+}
+
+.lead-detail-section h4 {
+    margin: 0;
+    font-size: 1rem;
+    color: #172131;
+}
+
+.lead-detail-section .admin-section-header {
+    margin-bottom: 14px;
+}
+
+.lead-detail-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+    gap: 10px;
+}
+
+.lead-detail-stat {
+    border: 1px solid var(--line);
+    border-radius: 15px;
+    background: var(--surface-muted);
+    padding: 13px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.lead-detail-stat strong {
+    font-size: 1.02rem;
+    color: #172131;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.lead-detail-stat span {
+    color: var(--muted);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+
+.lead-detail-data-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.lead-detail-field {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 13px;
+    background: #fff;
+    min-height: 76px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lead-detail-field strong {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+}
+
+.lead-detail-field__value {
+    color: #172131;
+    line-height: 1.45;
+    word-break: break-word;
+    font-size: 0.94rem;
+}
+
+.lead-rail { display: flex; flex-direction: column; gap: 14px; }
+.lead-detail-hero .muted { margin: 0; }
+.lead-detail-history { list-style: none; padding: 0; }
+.lead-detail-history li { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.lead-detail-history li span { color: var(--muted); }
+.lead-detail-main h3 { margin-block: 8px; }
+#lead-detail-payment .lead-detail-field { margin-bottom: 8px; }
+.lead-detail-field__value { overflow-wrap: anywhere; }
+@media (max-width: 470px) {
+    .lead-detail-data-grid { grid-template-columns: minmax(0, 1fr); }
+    .lead-detail-summary-card { padding: 10px; }
+}

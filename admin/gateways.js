@@ -1,9 +1,11 @@
+import { integrationForms } from './integration-forms.js?v=1';
+
 const numbers = new Intl.NumberFormat('pt-BR');
 const dates = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
 const rate = (count, base) => base ? Math.round(count * 100 / base) : 0;
 
 export async function gatewayTemplate() {
-  const response = await fetch('/admin/gateways.template.html?v=1');
+  const response = await fetch('/admin/gateways.template.html?v=2');
   if (!response.ok) throw new Error('Não foi possível carregar a página de gateways.');
   return response.text();
 }
@@ -83,19 +85,7 @@ export function populateGateways(root, { data, traffic, gateways, expanded }) {
     body.id = 'gateway-config-' + index;
     card.querySelector('.gateway-config-toggle').setAttribute('aria-controls', body.id);
     setGatewayCardOpen(card, expanded.has(name));
-    const values = [
-      ['Ambiente', 'Simulação'],
-      ['Posição na fila', index + 1],
-      ['PIX de teste no período', total.orders],
-      ['Confirmados em teste', total.paid],
-    ];
-    const summary = card.querySelector('dl');
-    for (const [label, value] of values) {
-      const wrap = document.createElement('div');
-      wrap.append(Object.assign(document.createElement('dt'), { textContent: label }),
-        Object.assign(document.createElement('dd'), { textContent: value }));
-      summary.append(wrap);
-    }
+    card.querySelector('[data-provider-fields]').innerHTML = integrationForms[name];
     card.querySelector('[data-test-provider]').dataset.testProvider = name;
     cards.append(card);
   });

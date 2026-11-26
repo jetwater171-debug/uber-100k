@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { siteSessionHandler } from './site-session.mjs';
+import { amendIntegrationPreview } from './integration-preview.mjs';
 import { channels, diagnosticModes, eventTypes, gateways } from './fixtures.mjs';
 import { csv, filterRows, matchingRows, reports, salesAudit } from './reports.mjs';
 import { HttpError } from './errors.mjs';
@@ -71,12 +72,15 @@ function amend(state, command, at, siteOrigin) {
       if (!gateways.includes(key) || typeof value !== 'boolean') break;
       state.settings.gateways.find(gateway => gateway.name === key).enabled = value;
       return { title: 'Gateway de teste atualizado', detail: key };
-    case 'gateway-settings':
-      if (!Array.isArray(value) || value.length !== gateways.length ||
-          new Set(value.map(entry => entry?.name)).size !== gateways.length ||
-          !value.every(entry => gateways.includes(entry?.name) && typeof entry.enabled === 'boolean')) break;
-      state.settings.gateways = value.map(({ name, enabled }) => ({ name, enabled }));
-      return { title: 'Configurações dos gateways salvas', detail: `${value.filter(entry => entry.enabled).length} ativos em teste` };
+    case 'gateway-settings': {
+      const priority = Array.isArray(value) ? value : value?.priority;
+      if (!Array.isArray(priority) || priority.length !== gateways.length ||
+          new Set(priority.map(entry => entry?.name)).size !== gateways.length ||
+          !priority.every(entry => gateways.includes(entry?.name) && typeof entry.enabled === 'boolean')) break;
+      if (value.profiles) amendIntegrationPreview(state.settings, value.profiles);
+      state.settings.gateways = priority.map(({ name, enabled }) => ({ name, enabled }));
+      return { title: 'Configurações dos gateways salvas', detail: `${priority.filter(entry => entry.enabled).length} ativos em teste` };
+    }
     case 'priority':
       if (!gateways.includes(key) || ![-1, 1].includes(value)) break;
       {
@@ -93,11 +97,17 @@ function amend(state, command, at, siteOrigin) {
       return { title: 'Eventos de teste configurados', detail: key };
     case 'tracking-settings': {
       if (!value || typeof value !== 'object' || Array.isArray(value)) break;
-      const entries = Object.entries(value);
-      if (!entries.length || !entries.every(([channel, events]) =>
+      const wrapped = Object.hasOwn(value, 'events') || Object.hasOwn(value, 'profiles');
+      const events = wrapped ? value.events : value;
+      if (!events || typeof events !== 'object' || Array.isArray(events)) break;
+      const entries = Object.entries(events);
+      if ((!entries.length && !value.profiles) || !entries.every(([channel, events]) =>
         channels.includes(channel) && Array.isArray(events) && events.every(event => eventTypes.includes(event)))) break;
       for (const [channel, events] of entries) state.settings.tracking[channel] = [...new Set(events)];
-      return { title: 'Configurações de tracking salvas', detail: entries.map(([channel]) => channel).join(', ') };
+      if (wrapped && value.profiles) amendIntegrationPreview(state.settings, value.profiles);
+      return { title: 'Configurações de tracking salvas', detail: [...new Set([
+        ...entries.map(([channel]) => channel), ...Object.keys(value.profiles || {}),
+      ])].join(', ') };
     }
     case 'pix':
       if (!state.settings.gateways.some(gateway => gateway.name === key && gateway.enabled)) break;
@@ -106,13 +116,18 @@ function amend(state, command, at, siteOrigin) {
       if (!Array.isArray(value) || !value.length || value.length > gateways.length || !value.every(name => gateways.includes(name))) break;
       const checks = [...new Set(value)].map(name => {
         const enabled = state.settings.gateways.find(entry => entry.name === name)?.enabled;
-        return enabled ? { name, code: `SIMULACAO-${randomUUID()}` } : { name };
+        const profile = state.settings.integrationPreview?.[name] || {};
+        const configured = Object.keys(profile).length;
+        return enabled ? { name, configured, code: `SIMULACAO-${randomUUID()}` } : { name, configured };
       });
       return { title: 'Teste de gateways registrado', detail: `${checks.length} selecionados`, status: 'Simulação', checks };
     }
     case 'integration-test':
       if (!channels.includes(key)) break;
-      return queueTest(state, key, at, value);
+      return {
+        ...queueTest(state, key, at, value),
+        configuredFields: Object.keys(state.settings.integrationPreview?.[key] || {}).length,
+      };
     case 'queue-process':
       return processQueue(state, at);
     case 'order-payment':

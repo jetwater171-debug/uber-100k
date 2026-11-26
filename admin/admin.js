@@ -1,5 +1,7 @@
-import { gatewayTemplate, populateGateways, setGatewayCardOpen } from './gateways.js?v=1';
-import { leadDetails } from './lead-details.js?v=4';
+import { gatewayTemplate, populateGateways, setGatewayCardOpen } from './gateways.js?v=2';
+import { integrationForms } from './integration-forms.js?v=1';
+import { previewFields } from './integration-preview.js?v=1';
+import { leadDetails } from './lead-details.js?v=5';
 
 const navigation = document.querySelector('#navigation');
 const login = document.querySelector('#login');
@@ -41,6 +43,14 @@ const pendingTracking = {};
 const gatewaySettings = document.querySelector('#gateway-settings');
 const testGateways = document.querySelector('#test-gateways');
 const expandedGateways = new Set();
+const integration = previewFields(view, () => state?.settings?.integrationPreview || {}, updateSettingsButton);
+const previewSections = {
+  gateways: ['ClownPay', 'GhostsPay', 'Sunize', 'Paradise', 'AtomoPay', 'Bravo Pay'],
+  tracking: ['Meta', 'TikTok'],
+  utmfy: ['UTMfy', 'Pushcut'],
+  sms: ['SMSMais', 'SMSMais remarketing'],
+};
+const previewHint = '<p class="integration-hint">Simulação. Use valores fictícios começando com teste_ para chaves e domínios .test para endpoints.</p>';
 let gatewayDraft;
 let gatewayMarkup;
 let gatewayReport;
@@ -94,7 +104,9 @@ function updateSettingsButton() {
   testGateways.hidden = !operator || !gateways;
   saveSettings.hidden = !operator || !(tracking || gateways || active === 'overview');
   saveSettings.setAttribute('form', gateways ? 'gateway-settings' : tracking ? 'tracking-settings' : 'dashboard-settings');
-  const dirty = gateways ? Boolean(gatewayDraft) : Object.keys(tracking ? pendingTracking : pendingSettings).length > 0;
+  const scopes = previewSections[active] || [];
+  const eventChanges = tracking && Object.keys(pendingTracking).some(channel => scopes.includes(channel));
+  const dirty = (gateways ? Boolean(gatewayDraft) : tracking ? eventChanges : Boolean(Object.keys(pendingSettings).length)) || integration.dirty(scopes);
   saveSettings.disabled = !dirty || updatesInFlight > 0;
 }
 
@@ -117,6 +129,7 @@ function account(user) {
     gatewayDraft = undefined;
     gatewayReport = undefined;
     expandedGateways.clear();
+    integration.clear();
     for (const key of Object.keys(pendingSettings)) delete pendingSettings[key];
     for (const key of Object.keys(pendingTracking)) delete pendingTracking[key];
   }
@@ -382,6 +395,7 @@ function listView(kind, data) {
 function updateGatewayView(focus) {
   view.innerHTML = gatewayMarkup;
   populateGateways(view, { ...gatewayReport, gateways: gatewayDraft ?? state.settings.gateways, expanded: expandedGateways });
+  integration.hydrate();
   if (focus) {
     const row = [...view.querySelectorAll('[data-gateway-order-item]')].find(item => item.dataset.gatewayOrderItem === focus.name);
     const move = row?.querySelector(`[data-gateway-order-move="${focus.direction}"]:enabled`) || row?.querySelector('.gateway-order-move:enabled');
@@ -424,21 +438,21 @@ function diagnosticButtons(channel, scenarios) {
 
 function pixelSettings() {
   const platforms = ['Meta', 'TikTok'];
-  const settings = platforms.map(channel => panel(`Pixel do ${channel}`, channelSettings(channel), 'Simulação'));
+  const settings = platforms.map(channel => panel(`Pixel do ${channel}`, integrationForms[channel] + channelSettings(channel), 'Simulação'));
   const tests = platforms.map(channel => `<form class="controls diagnostic-form" data-channel="${channel}">
     <label>Cenário do ${channel}<select name="mode">${state.diagnostics[channel].map(mode => `<option>${escape(mode)}</option>`).join('')}</select></label>
     <button type="submit" class="button secondary">Testar ${channel}</button></form>`);
-  return '<div class="stack"><form id="tracking-settings" class="stack">' + settings.join('') + '</form>' +
+  return '<div class="stack"><form id="tracking-settings" class="stack">' + previewHint + settings.join('') + '</form>' +
     panel('Teste rápido', '<div class="columns">' + tests.join('') + '</div>') + '</div>';
 }
 
 function utmfyView() {
   return '<form id="tracking-settings" hidden></form>' +
-    panel('UTMfy', channelSettings('UTMfy'), 'Simulação') +
+    panel('UTMfy', previewHint + integrationForms.UTMfy + channelSettings('UTMfy'), 'Simulação') +
     panel('Teste rápido', diagnosticButtons('UTMfy', [['PIX gerado', 'Testar PIX gerado'], ['PIX pago', 'Testar PIX pago']])) +
     panel('Venda manual', diagnosticButtons('UTMfy', [['Venda manual', 'Enfileirar simulação']]), 'Simulação') +
-    panel('Pushcut', channelSettings('Pushcut') + diagnosticButtons('Pushcut', [['PIX gerado', 'Testar PIX gerado'], ['PIX pago', 'Testar PIX pago']]), 'Simulação') +
-    panel('Fila backend', table(['Canal', 'Evento', 'Estado', 'Tentativas'], state.queue.map(item =>
+    panel('Pushcut', integrationForms.Pushcut + channelSettings('Pushcut') + diagnosticButtons('Pushcut', [['PIX gerado', 'Testar PIX gerado'], ['PIX pago', 'Testar PIX pago']]), 'Simulação') +
+    panel('Fila backend', '<button id="process-queue" class="button secondary" type="button">Processar fila agora</button>' + table(['Canal', 'Evento', 'Estado', 'Tentativas'], state.queue.map(item =>
       [escape(item.channel), escape(item.event), escape(item.status), item.attempts])),
     `${state.queue.length} registros`);
 }
@@ -500,8 +514,9 @@ function smsView() {
       <h3>Remarketing de pedidos pendentes</h3>
       <p>Enfileire lembretes e confira o andamento no ambiente de teste.</p></div>
       <div class="admin-hero-highlight"><span>PIX pendentes</span><strong>${pending}</strong></div></div>`, 'Simulação') +
-    panel('Conexão da API', channelSettings('SMSMais'), 'Eventos de teste') +
+    panel('Conexão da API', previewHint + integrationForms.SMSMais + channelSettings('SMSMais'), 'Simulação') +
     panel('Webhook de entrega e respostas', diagnosticButtons('SMSMais', [['Retorno de entrega', 'Simular retorno de entrega']])) +
+    panel('Remarketing automático', integrationForms['SMSMais remarketing'], 'Prévia') +
     pendingRemarketing() +
     panel('Teste de SMS', diagnosticButtons('SMSMais', [['SMS de teste', 'Testar SMS']])) +
     panel('Torpedo de voz', diagnosticButtons('SMSMais', [['Torpedo de voz', 'Testar voz']])) +
@@ -569,7 +584,10 @@ async function render() {
       if (current !== sequence || !operator) return;
       gatewayReport = { data, traffic };
       updateGatewayView();
-    } else view.innerHTML = renderers[active]();
+    } else {
+      view.innerHTML = renderers[active]();
+      integration.hydrate();
+    }
     if (keepFocus) view.querySelector('#live-refresh')?.focus({ preventScroll: true });
   } catch (error) {
     if (current === sequence) notice(error.message, true);
@@ -632,13 +650,18 @@ testGateways.addEventListener('click', () => openGatewayTests());
 
 gatewaySettings.addEventListener('submit', async event => {
   event.preventDefault();
-  if (!gatewayDraft || updatesInFlight) return;
-  const submitted = gatewayDraft;
+  const scopes = previewSections.gateways;
+  if ((!gatewayDraft && !integration.dirty(scopes)) || updatesInFlight) return;
   saveSettings.disabled = true;
   view.inert = true;
   try {
-    await command('gateway-settings', null, submitted);
+    await command('gateway-settings', null, {
+      priority: gatewayDraft ?? state.settings.gateways,
+      profiles: integration.patch(scopes),
+    });
     gatewayDraft = undefined;
+    integration.clear(scopes);
+    if (section() === 'gateways') integration.hydrate();
   } catch (error) {
     notice(error.message, true);
     await render();
@@ -705,8 +728,9 @@ details.addEventListener('submit', async event => {
     results.textContent = 'Executando testes…';
     try {
       const result = await command('pix-batch', null, selected);
-      results.innerHTML = result.checks.map(({ name, code }) => `<section class="gateway-test-card">
+      results.innerHTML = result.checks.map(({ name, code, configured }) => `<section class="gateway-test-card">
         <strong>${escape(name)}</strong><p>${code ? 'PIX de teste gerado' : 'Gateway desligado'}</p>
+        <p class="muted">${integer.format(configured)} campos de teste salvos</p>
         ${code ? `<code>${escape(code)}</code>` : ''}</section>`).join('');
     } catch (error) {
       results.textContent = error.message;
@@ -796,13 +820,19 @@ view.addEventListener('submit', async event => {
   if (form.id === 'dashboard-settings' || form.id === 'tracking-settings') {
     const tracking = form.id === 'tracking-settings';
     const pending = tracking ? pendingTracking : pendingSettings;
-    if (!Object.keys(pending).length) return;
+    const scopes = tracking ? previewSections[section()] || [] : [];
+    const changes = Object.fromEntries(Object.entries(pending).filter(([name]) => !tracking || scopes.includes(name)));
+    if ((!Object.keys(changes).length && !integration.dirty(scopes)) || updatesInFlight) return;
     saveSettings.disabled = true;
+    view.inert = true;
     try {
-      await command(tracking ? 'tracking-settings' : 'features', null, { ...pending });
-      for (const key of Object.keys(pending)) delete pending[key];
+      await command(tracking ? 'tracking-settings' : 'features', null,
+        tracking ? { events: changes, profiles: integration.patch(scopes) } : changes);
+      for (const key of Object.keys(changes)) delete pending[key];
+      integration.clear(scopes);
+      integration.hydrate();
     } catch (error) { notice(error.message, true); await render(); }
-    finally { updateSettingsButton(); }
+    finally { view.inert = false; updateSettingsButton(); }
     return;
   }
   if (form.id === 'filters') {
@@ -826,7 +856,8 @@ view.addEventListener('submit', async event => {
       } else if (form.id === 'domain-check') {
         await command('domain-check', entries.page, entries.candidate);
       } else {
-        await command('integration-test', form.dataset.channel, entries.mode || undefined);
+        const result = await command('integration-test', form.dataset.channel, entries.mode || undefined);
+        notice(`${result.detail} · ${result.status} · ${integer.format(result.configuredFields)} campos de teste salvos`);
       }
     } catch (error) { notice(error.message, true); }
     return;

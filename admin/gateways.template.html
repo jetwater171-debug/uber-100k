@@ -79,7 +79,7 @@
       </div>
       <div id="payments-gateway-order" class="gateway-order-list" aria-label="Prioridade dos gateways"></div>
     </div>
-    <p class="gateway-top-row-note">A ordem vale da primeira à última tentativa. Salve no topo para aplicar as mudanças ao ambiente de teste.</p>
+    <p class="gateway-top-row-note">Preencha com chaves fictícias começando com teste_ e URLs terminadas em .test. Salve no topo para gravar os campos e a prioridade.</p>
   </div>
   <div class="gateway-card-list"></div>
 </section>
@@ -115,8 +115,10 @@
       </div>
     </header>
     <div class="gateway-card-body" inert>
-      <div class="gateway-fields-grid"><dl class="gateway-provider-summary"></dl>
-        <button class="button secondary" type="button" data-test-provider>Testar gateway</button></div>
+      <div class="gateway-fields-grid">
+        <div data-provider-fields></div>
+        <button class="button secondary" type="button" data-test-provider>Testar gateway</button>
+      </div>
     </div>
   </article>
 </template>

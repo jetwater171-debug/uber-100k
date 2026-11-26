@@ -6,10 +6,11 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#000000">
   <title>Uber Driver | Painel administrativo</title>
-  <link rel="stylesheet" href="/admin/admin.css?v=5">
+  <link rel="stylesheet" href="/admin/admin.css?v=6">
   <link rel="stylesheet" href="/admin/reference-layout.css?v=3">
-  <link rel="stylesheet" href="/admin/gateway-layout.css?v=2">
-  <script type="module" src="/admin/admin.js?v=6"></script>
+  <link rel="stylesheet" href="/admin/gateway-layout.css?v=3">
+  <link rel="stylesheet" href="/admin/lead-layout.css?v=1">
+  <script type="module" src="/admin/admin.js?v=7"></script>
 </head>
 <body>
   <div class="admin-shell">
@@ -65,14 +66,90 @@
     <form class="lead-close" method="dialog"><button class="button secondary" aria-label="Fechar detalhes do lead" autofocus>×</button></form>
     <div class="lead-layout">
       <aside class="lead-rail">
-        <p class="eyebrow">Detalhes do lead</p>
-        <h2 id="lead-title">Sessão</h2>
-        <p id="lead-subtitle" class="muted"></p>
-        <div id="lead-summary"></div>
-        <div id="lead-actions" class="lead-actions"></div>
+        <div class="lead-detail-hero">
+          <span class="lead-detail-kicker">Detalhes do lead</span>
+          <h2 id="lead-title">Sessão</h2>
+          <p id="lead-subtitle" class="muted"></p>
+        </div>
+        <div id="lead-detail-meta" class="lead-detail-tags"></div>
+        <div id="lead-summary" class="lead-detail-summary"></div>
+        <div id="lead-actions" class="lead-detail-actions"></div>
         <p id="lead-feedback" class="muted" role="status"></p>
       </aside>
-      <div id="lead-main" class="lead-main"></div>
+      <div class="lead-detail-main lead-main" id="lead-main">
+        <section class="lead-detail-section lead-detail-section--wide">
+          <div class="admin-section-header">
+            <h4>Visão geral</h4>
+          </div>
+          <div id="lead-detail-overview" class="lead-detail-stat-grid"></div>
+        </section>
+
+        <section class="lead-detail-section">
+          <div class="admin-section-header">
+            <h4>Identificação da sessão</h4>
+          </div>
+          <div id="lead-detail-identity" class="lead-detail-data-grid"></div>
+        </section>
+
+        <section class="lead-detail-section">
+          <div class="admin-section-header">
+            <h4>Consulta da região</h4>
+          </div>
+          <div id="lead-detail-address" class="lead-detail-data-grid"></div>
+        </section>
+
+        <section class="lead-detail-section">
+          <div class="admin-section-header">
+            <h4>Pagamento e oferta</h4>
+          </div>
+          <div id="lead-detail-payment" class="lead-detail-data-grid"></div>
+        </section>
+
+        <section class="lead-detail-section lead-detail-section--wide">
+          <div class="admin-section-header">
+            <h4>Consulta da transação</h4>
+            <span id="lead-detail-transaction-status" class="badge">Aguardando consulta</span>
+          </div>
+          <div id="lead-detail-transaction-summary" class="lead-detail-data-grid" role="status"></div>
+        </section>
+
+        <section class="lead-detail-section">
+          <div class="admin-section-header">
+            <h4>Origem e tracking</h4>
+          </div>
+          <div id="lead-detail-tracking" class="lead-detail-data-grid"></div>
+        </section>
+
+        <section class="lead-detail-section">
+          <div class="admin-section-header">
+            <h4>Atividade recente</h4>
+          </div>
+          <div id="lead-detail-device" class="lead-detail-data-grid"></div>
+        </section>
+
+        <section class="lead-detail-section">
+          <div class="admin-section-header">
+            <h4>Contexto técnico</h4>
+          </div>
+          <div id="lead-detail-technical" class="lead-detail-data-grid"></div>
+        </section>
+
+        <section class="lead-detail-section lead-detail-section--wide">
+          <div class="admin-section-header">
+            <h4>Jornada registrada</h4>
+          </div>
+          <p class="admin-muted lead-detail-hint">Páginas e eventos registrados no período selecionado.</p>
+          <div id="lead-detail-pages" class="lead-detail-pages"></div>
+        </section>
+
+        <section class="lead-detail-section lead-detail-section--wide">
+          <div class="admin-section-header">
+            <h4>Dados da sessão</h4>
+            <button id="lead-detail-copy-payload" class="button secondary" data-lead-action="copy-json" type="button">Copiar JSON</button>
+          </div>
+          <details><summary>Ver JSON</summary><pre id="lead-detail-payload" class="lead-data"></pre></details>
+        </section>
+      </div>
     </div>
   </dialog>
 </body>

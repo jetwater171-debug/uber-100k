@@ -205,6 +205,16 @@ th { font-size: 11px; font-weight: 750; color: var(--muted); }
 .control-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; padding-block: 9px; border-top: 1px solid var(--line); }
 .checks { display: flex; gap: 9px 15px; flex-wrap: wrap; }
 .checks label, .checkbox { display: flex; gap: 6px; align-items: center; }
+.integration-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-block: 8px 14px; }
+.integration-fields .input-group { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.integration-fields .floating-label { grid-row: 1; color: #202020; font-size: 12px; }
+.integration-fields .floating-input { min-height: 44px; font: inherit; border-radius: 9px; }
+.integration-fields textarea { width: 100%; min-height: 84px; padding: 9px 10px; border: 1px solid var(--line); resize: vertical; color: #161b23; background: #fff; }
+.integration-flag { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.integration-clear { justify-self: start; border: 0; background: none; color: var(--accent); padding: 3px 0 0; font-size: 12px; }
+.integration-hint { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+@media (max-width: 1080px) { .integration-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 540px) { .integration-fields { grid-template-columns: minmax(0, 1fr); } }
 input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .empty { color: var(--muted); padding: 12px 0; font-size: 13px; }
 .details-list { line-height: 1.8; padding-inline-start: 22px; }

@@ -22,6 +22,8 @@ Em **SMS e remarketing**, enfileire um lembrete de teste para um pedido pendente
 
 Na aba **Gateways**, arraste um provedor ou use as setas para ajustar a prioridade. Os cartões permitem ligar ou desligar cada gateway. Clique em **Salvar configurações** para gravar a lista inteira. **Testar gateways** usa a configuração salva e registra o diagnóstico dos provedores escolhidos. A consulta de pagamentos aceita o ID do pedido ou o código PIX de teste.
 
+Os formulários de Gateways, Tracking, UTMfy, Pushcut e SMSMais registram configurações da simulação. URLs de teste usam HTTPS e domínios `.test`. Chaves fictícias usam o prefixo `teste_`. Para chaves, o servidor recebe apenas a indicação de que o campo foi configurado. Os diagnósticos são internos ao painel.
+
 **Vendas** resume pedidos de teste registrados por estado com os mesmos filtros da tabela. Use **Gateways PIX → Consulta de transação** para localizar um pedido de teste pelo identificador ou pelo código gerado. **Público** exporta a distribuição das sessões registradas por etapa, sem métricas geradas.
 
 **Eventos da jornada** registra a conclusão do cadastro, o avanço em cada pergunta, a conclusão do quiz, os resultados da consulta de CEP, a análise simulada e a seleção de ofertas. Cada ação é contabilizada uma vez por página, sessão e dia, sem armazenar campos do formulário, CEP ou respostas.
