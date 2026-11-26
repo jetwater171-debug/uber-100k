@@ -63,7 +63,7 @@
     gap: 8px;
     border: 1px solid #e8ecf2;
     border-radius: 8px;
-    background: #f9fbfe;
+    background: var(--surface-muted);
     padding: 8px;
     cursor: grab;
     transition: border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
@@ -207,8 +207,8 @@
 .gateway-card {
     border: 1px solid #e8ecf2;
     border-radius: 18px;
-    background: linear-gradient(180deg, #fbfcff 0%, #ffffff 100%);
-    box-shadow: 0 10px 22px rgba(9, 30, 66, 0.05);
+    background: var(--surface);
+    box-shadow: 0 4px 14px #00000008;
     overflow: hidden;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
@@ -219,8 +219,8 @@
 }
 
 .gateway-card.is-current {
-    border-color: #ffc2c8;
-    box-shadow: 0 14px 28px rgba(234, 29, 44, 0.14);
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 .gateway-card-header {
