@@ -4,7 +4,7 @@ import { channels, diagnosticModes, eventTypes, gateways } from './fixtures.mjs'
 import { csv, filterRows, matchingRows, reports, salesAudit } from './reports.mjs';
 import { HttpError } from './errors.mjs';
 import { journeyPages, journeyTitle, summarizeJourney } from './journey.mjs';
-import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueReminders, queueTest, reconcileOrder, uuid } from './operations.mjs';
+import { createDemoOrder, demoCatalog, paymentForOrder, processQueue, queueNavigationEvents, queueReminder, queueReminders, queueTest, reconcileOrder, status, uuid } from './operations.mjs';
 
 function json(data, status = 200, headers = {}) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
@@ -85,6 +85,14 @@ function amend(state, command, at, siteOrigin) {
       if (!channels.includes(key) || !Array.isArray(value) || !value.every(event => eventTypes.includes(event))) break;
       state.settings.tracking[key] = [...new Set(value)];
       return { title: 'Eventos de teste configurados', detail: key };
+    case 'tracking-settings': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) break;
+      const entries = Object.entries(value);
+      if (!entries.length || !entries.every(([channel, events]) =>
+        ['Meta', 'TikTok'].includes(channel) && Array.isArray(events) && events.every(event => eventTypes.includes(event)))) break;
+      for (const [channel, events] of entries) state.settings.tracking[channel] = [...new Set(events)];
+      return { title: 'Configurações de tracking salvas', detail: entries.map(([channel]) => channel).join(', ') };
+    }
     case 'pix':
       if (!state.settings.gateways.some(gateway => gateway.name === key && gateway.enabled)) break;
       return { title: 'PIX de teste', detail: key, code: `SIMULACAO-${randomUUID()}`, status: 'Simulado · sem cobrança' };
@@ -117,7 +125,7 @@ function amend(state, command, at, siteOrigin) {
 }
 
 const trackedPages = Object.keys(journeyPages);
-const leadFields = ['id', 'name', 'city', 'origin', 'device'];
+const leadFields = ['id', 'name', 'origin', 'orderId'];
 const saleFields = ['id', 'sessionId', 'gateway'];
 const sections = ['overview', 'pages', 'leads', 'audience', 'sales', 'catalog', 'gateways',
   'tracking', 'activity', 'utmfy', 'sms', 'queue', 'navigation', 'domains', 'security'];
@@ -205,7 +213,16 @@ async function viewReport(store, params, time, siteOrigin) {
     }));
     return { state, data: overview, traffic, journey: { ...journey, recent } };
   }
-  if (['overview', 'pages', 'audience'].includes(section)) {
+  if (section === 'overview') {
+    const [traffic, events] = await Promise.all([trafficReport(store, since, until), store.readJourneyEvents(since, undefined, until)]);
+    const reached = event => new Set(events.filter(row => row.event === event).map(row => row.session)).size;
+    return { state, data: {
+      ...overview, lastActivity: events[0]?.occurred_at,
+      funnel: { postal: reached('lookup_resolved'), selection: reached('selection_opened'),
+        paid: new Set(orders.filter(order => order.status === status.paid).map(order => order.sessionId)).size },
+    }, traffic };
+  }
+  if (['pages', 'audience'].includes(section)) {
     return { state, data: overview, traffic: await trafficReport(store, since, until) };
   }
   return { state, data: overview };
@@ -214,6 +231,8 @@ async function viewReport(store, params, time, siteOrigin) {
 function trackedLead(id, visits) {
   const pages = new Set(visits.map(visit => visit.page));
   const firstDay = visits.map(visit => visit.day).sort()[0];
+  const latestDay = visits.map(visit => visit.day).sort().at(-1);
+  const latestTime = visits.filter(visit => visit.day === latestDay).map(visit => visit.occurred_at).filter(Boolean).sort().at(-1);
   return {
     id,
     name: `Sessão ${id.slice(0, 8)}`,
@@ -221,6 +240,8 @@ function trackedLead(id, visits) {
     origin: 'Jornada acompanhada',
     startedOn: firstDay,
     createdAt: `${firstDay}T00:00:00Z`,
+    updatedOn: latestDay,
+    updatedAt: latestTime,
     steps: trackedPages.filter(page => pages.has(page)).map(page => journeyPages[page]),
   };
 }
@@ -233,7 +254,7 @@ async function leadRecords(store, orders, since, until) {
   }
   const includeOrder = row => {
     const latest = latestBySession.get(row.id);
-    return { ...row, gateway: latest?.gateway || '', status: latest?.status || '' };
+    return { ...row, orderId: latest?.id, total: latest?.total, gateway: latest?.gateway || '', status: latest?.status || '' };
   };
   const visits = await store.readTraffic(since, undefined, until);
   const bySession = new Map();
@@ -242,7 +263,8 @@ async function leadRecords(store, orders, since, until) {
     bySession.get(visit.session).push(visit);
   }
   const rows = Array.from(bySession, ([id, pages]) => trackedLead(id, pages))
-    .sort((first, next) => next.startedOn.localeCompare(first.startedOn) || first.id.localeCompare(next.id));
+    .sort((first, next) => next.updatedOn.localeCompare(first.updatedOn) ||
+      (next.updatedAt || '').localeCompare(first.updatedAt || '') || first.id.localeCompare(next.id));
   return { rows: rows.map(includeOrder), limited: visits.length >= 1000 };
 }
 
@@ -257,7 +279,7 @@ async function saveOperation(store, state, result, operator, at) {
 
 async function recordDemoNavigation(store, event, at) {
   const { page, session, day } = event;
-  await store.recordTraffic({ page, session, day });
+  await store.recordTraffic({ page, session, day, occurred_at: at });
   for (let attempt = 0; attempt < 3; attempt++) {
     const state = await store.read();
     if (!queueNavigationEvents(state, event, at)) return;
@@ -344,8 +366,8 @@ export function adminHandler({ auth, store, now = Date.now, siteSecret = randomB
         const [snapshot, events] = await Promise.all([store.read(), store.readJourneyEvents(since, id, until)]);
         const orders = snapshot.orders.filter(order => order.sessionId === id);
         const history = visits.toSorted((first, next) => first.day.localeCompare(next.day) ||
-          trackedPages.indexOf(first.page) - trackedPages.indexOf(next.page))
-          .map(({ page, day }) => ({ title: journeyPages[page], day }));
+          (first.occurred_at || '').localeCompare(next.occurred_at || '') || trackedPages.indexOf(first.page) - trackedPages.indexOf(next.page))
+          .map(({ page, day, occurred_at }) => ({ title: journeyPages[page], day, at: occurred_at }));
         const activity = events.map(({ page, event, occurred_at }) => ({ title: journeyTitle(page, event), at: occurred_at }));
         return json({ lead: { ...trackedLead(id, visits), visits: history, activity }, orders });
       }

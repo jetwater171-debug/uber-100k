@@ -4,6 +4,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/admin/:section(tracking|utmfy|smsmais|gateways|pages|publico|vendas|backredirects|leads|dominios|catalogo|fila|eventos|auditoria)", "destination": "/admin.html" },
     { "source": "/api/admin/:route*", "destination": "/api/admin?route=:route*" }
   ],
   "headers": [

@@ -37,7 +37,8 @@ const server = createServer(async (incoming, outgoing) => {
       outgoing.end(Buffer.from(await response.arrayBuffer()));
       return;
     }
-    const route = url.pathname === '/' ? '/index.html' : url.pathname === '/admin' ? '/admin.html' : url.pathname;
+    const adminPage = /^\/admin(?:\/(tracking|utmfy|smsmais|gateways|pages|publico|vendas|backredirects|leads|dominios|catalogo|fila|eventos|auditoria))?$/.test(url.pathname);
+    const route = url.pathname === '/' ? '/index.html' : adminPage ? '/admin.html' : url.pathname;
     const filename = resolve(publicDir, '.' + decodeURIComponent(route));
     const target = relative(publicDir, filename);
     if (isAbsolute(target) || target.startsWith('..')) { outgoing.writeHead(404).end(); return; }

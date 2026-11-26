@@ -21,8 +21,18 @@ export function reportPeriod(params, now) {
     if (!Number.isInteger(days) || days < 1 || days > 90) throw new HttpError(400, 'Informe um intervalo de até 90 dias.');
     return { days, start };
   }
+  const today = Math.floor(now / dayMs) * dayMs;
+  const month = new Date(today).getUTCDate();
+  const startByPreset = {
+    all: 0, today, yesterday: today - dayMs, month: today - (month - 1) * dayMs,
+  };
+  const preset = params.get('days');
+  if (Object.hasOwn(startByPreset, preset)) {
+    const start = startByPreset[preset];
+    return { days: preset === 'yesterday' ? 1 : (today - start) / dayMs + 1, start };
+  }
   const days = [7, 14, 30].includes(Number(params.get('days'))) ? Number(params.get('days')) : 7;
-  return { days, start: Math.floor(now / dayMs) * dayMs - (days - 1) * dayMs };
+  return { days, start: today - (days - 1) * dayMs };
 }
 
 export function reports(params, now = Date.now(), journeyOrders = []) {

@@ -1,4 +1,4 @@
-import { leadDetails } from './lead-details.js?v=3';
+import { leadDetails } from './lead-details.js?v=4';
 
 const navigation = document.querySelector('#navigation');
 const login = document.querySelector('#login');
@@ -8,12 +8,19 @@ const view = document.querySelector('#view');
 const details = document.querySelector('#details');
 const saveSettings = document.querySelector('#save-settings');
 const groups = [
-  ['', ['overview', 'Visão geral'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy e Pushcut'], ['sms', 'SMS e remarketing'],
-    ['gateways', 'Gateways PIX'], ['pages', 'Páginas e funil'], ['audience', 'Público'], ['sales', 'Vendas'],
+  ['', ['overview', 'Visão geral'], ['tracking', 'Tracking'], ['utmfy', 'UTMfy'], ['sms', 'SMSMais'],
+    ['gateways', 'Gateways'], ['pages', 'Páginas'], ['audience', 'Público'], ['sales', 'Vendas'],
     ['navigation', 'Saídas e retornos'], ['leads', 'Leads'], ['domains', 'Domínios']],
   ['Operação de teste', ['catalog', 'Catálogo'], ['queue', 'Fila de testes'], ['activity', 'Eventos da jornada'], ['security', 'Auditoria e segurança']],
 ];
 const sectionNames = Object.fromEntries(groups.flatMap(([, ...links]) => links));
+const sectionPaths = {
+  overview: '/admin', tracking: '/admin/tracking', utmfy: '/admin/utmfy', sms: '/admin/smsmais',
+  gateways: '/admin/gateways', pages: '/admin/pages', audience: '/admin/publico', sales: '/admin/vendas',
+  navigation: '/admin/backredirects', leads: '/admin/leads', domains: '/admin/dominios',
+  catalog: '/admin/catalogo', queue: '/admin/fila', activity: '/admin/eventos', security: '/admin/auditoria',
+};
+const sectionsByPath = Object.fromEntries(Object.entries(sectionPaths).map(([id, path]) => [path, id]));
 const eventTypes = ['PageView', 'ViewContent', 'Lead', 'InitiateCheckout', 'Purchase'];
 const orderStatuses = ['Aguardando PIX de teste', 'Pendente no teste', 'Pago no teste', 'Cancelado no teste'];
 const trackedLabels = {
@@ -23,13 +30,15 @@ const trackedLabels = {
 const moneyFormat = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const integer = new Intl.NumberFormat('pt-BR');
 const date = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-const contexts = { days: 7, from: '', to: '', q: '', page: 1, gateway: '', status: '' };
+const contexts = { days: 'all', from: '', to: '', q: '', page: 1, gateway: '', status: '' };
 const dashboardControls = [
   ['compareGateways', 'Comparar gateways'],
   ['offerExtras', 'Exibir acessórios no catálogo de teste'],
 ];
 const pendingSettings = {};
+const pendingTracking = {};
 let operator;
+let localMode = false;
 let state;
 let sequence = 0;
 let liveRefresh = false;
@@ -47,7 +56,7 @@ const checked = value => value ? ' checked' : '';
 const selected = value => value ? ' selected' : '';
 const section = () => {
   const name = location.hash.slice(1).split('/')[0];
-  return Object.hasOwn(sectionNames, name) ? name : 'overview';
+  return Object.hasOwn(sectionNames, name) ? name : sectionsByPath[location.pathname] || 'overview';
 };
 const params = (fields = {}) => new URLSearchParams({ ...contexts, ...fields });
 
@@ -72,8 +81,10 @@ function openLinkedLead() {
 }
 
 function updateSettingsButton() {
-  saveSettings.hidden = !operator || section() !== 'overview';
-  saveSettings.disabled = !Object.keys(pendingSettings).length || updatesInFlight > 0;
+  const tracking = section() === 'tracking';
+  saveSettings.hidden = !operator || (!tracking && section() !== 'overview');
+  saveSettings.setAttribute('form', tracking ? 'tracking-settings' : 'dashboard-settings');
+  saveSettings.disabled = !Object.keys(tracking ? pendingTracking : pendingSettings).length || updatesInFlight > 0;
 }
 
 function notice(message, error = false) {
@@ -88,11 +99,12 @@ function account(user) {
   view.hidden = !user;
   navigation.hidden = !user;
   document.querySelector('#operator').hidden = !user;
-  document.querySelector('#operator-name').textContent = user?.name || '';
+  document.querySelector('#logout').hidden = !user;
   if (!user) {
     view.replaceChildren();
     leadDialog.close();
     for (const key of Object.keys(pendingSettings)) delete pendingSettings[key];
+    for (const key of Object.keys(pendingTracking)) delete pendingTracking[key];
   }
   updateSettingsButton();
   scheduleRefresh();
@@ -100,7 +112,7 @@ function account(user) {
 
 function nav(active) {
   navigation.innerHTML = groups.map(([group, ...links]) => (group ? '<p class="nav-label">' + group + '</p>' : '') +
-    links.map(([id, label]) => `<a href="#${id}"${id === active ? ' aria-current="page"' : ''}>${label}</a>`).join('')).join('');
+    links.map(([id, label]) => `<a href="${sectionPaths[id]}#${id}"${id === active ? ' aria-current="page"' : ''}>${label}</a>`).join('')).join('');
 }
 
 function title(name, copy) {
@@ -108,9 +120,15 @@ function title(name, copy) {
     <h1>${escape(name)}</h1><p class="muted">${escape(copy)}</p></div>`;
 }
 
+const periodOptions = [
+  ['all', 'Todo período'], ['today', 'Hoje'], ['yesterday', 'Ontem'], ['7', 'Últimos 7 dias'],
+  ['14', 'Últimos 14 dias'], ['30', 'Últimos 30 dias'], ['month', 'Este mês'], ['custom', 'Personalizado'],
+];
+
 function range() {
-  return `<label>Período <select id="period">${[7, 14, 30].map(days =>
-    `<option value="${days}"${selected(days === contexts.days)}>Últimos ${days} dias</option>`).join('')}</select></label>`;
+  const value = contexts.from ? 'custom' : String(contexts.days);
+  return `<label>Período <select id="period">${periodOptions.filter(([key]) => key !== 'custom' || section() === 'overview' || value === key)
+    .map(([key, label]) => `<option value="${key}"${selected(key === value)}>${label}</option>`).join('')}</select></label>`;
 }
 
 function liveControls() {
@@ -147,42 +165,89 @@ function bars(items) {
     <strong>${integer.format(item.count)}</strong></div>`).join('') : '<p class="empty">Sem registros no período.</p>';
 }
 
-function metric(label, value) {
-  return `<div class="panel metric"><span>${label}</span><strong>${value}</strong></div>`;
-}
-
 function auditTable(records) {
   return table(['Quando', 'Atividade', 'Detalhe', 'Resultado'], records.map(record =>
     [date.format(new Date(record.at)), escape(record.title), escape(record.detail), escape(record.status || 'Registrado')]));
 }
 
 function dashboard(data, traffic) {
-  const { counts } = data;
-  return title('Visão geral', 'Acompanhe o funil e as vendas de teste da campanha.') + liveControls() + '</div>' +
-    `<section class="panel live-panel"><div><h2>Monitoramento ao vivo</h2>
-      <p class="muted">Acompanhe a navegação compartilhada pelos visitantes e os pedidos de teste.</p>
-      <div class="controls"><span class="badge">${integer.format(traffic.pageViews)} ${traffic.pageViews === 1 ? 'visita registrada' : 'visitas registradas'}</span>
-      <span class="badge">Gateway prioritário · ${escape(state.settings.gateways.find(item => item.enabled)?.name || 'Nenhum ativo')}</span></div></div>
-      <div class="live-score"><span>Sessões acompanhadas</span><strong>${integer.format(traffic.sessions)}</strong></div></section>` +
-    `<form id="date-filter" class="controls">
+  const { funnel, counts, lastActivity, since, until, journeyGatewaySales } = data;
+  const gateway = state.settings.gateways.find(item => item.enabled);
+  const ratio = (value, base = traffic.sessions) => base ? Math.round(value / base * 100) : 0;
+  const periodLabel = contexts.from ? `${displayDay(since)} a ${displayDay(until)}`
+    : periodOptions.find(([key]) => key === String(contexts.days))?.[1];
+  const steps = [
+    ['CEP encontrado', funnel.postal, 'Região consultada'],
+    ['Seleção aberta', funnel.selection, 'Resumo de produtos'],
+    ['PIX confirmado em teste', counts.testPaid, 'Pedidos de teste'],
+  ];
+  const kpi = (title, value, description, accent = false) => `
+    <div class="admin-kpi${accent ? ' admin-kpi--accent' : ''}">
+      <span>${title}</span><strong>${value}</strong><em>${description}</em>
+    </div>`;
+  const gateways = journeyGatewaySales.filter(row => row.orders);
+  const best = gateways.toSorted((a, b) => ratio(b.paid, b.orders) - ratio(a.paid, a.orders))[0];
+  return `<div class="admin-section-header overview-heading">
+      <h1>Visão geral</h1><span class="badge">Base: ${integer.format(traffic.sessions)}</span>
+    </div>
+    <div class="admin-hero">
+      <div><h3>Monitoramento ao vivo</h3>
+        <p>Compare o funil por etapa e acompanhe as sessões registradas no site.</p>
+        <div class="admin-hero-tags">
+          <span class="admin-tag">Última atividade: <strong>${lastActivity ? date.format(new Date(lastActivity)) : '—'}</strong></span>
+          <span class="admin-tag">Gateway ativo: <strong>${escape(gateway?.name || '—')}</strong></span>
+          <span class="admin-tag">Melhor conversão: <strong>${best ? escape(best.name) + ' · ' + ratio(best.paid, best.orders) + '%' : '—'}</strong></span>
+          <span class="admin-tag">Fonte: ${localMode ? 'Servidor local' : 'Supabase'}</span>
+        </div>
+      </div>
+      <div class="admin-hero-highlight"><span>Sessões registradas</span><strong>${integer.format(traffic.sessions)}</strong><em>No período</em></div>
+    </div>
+    <form id="date-filter" class="overview-range">
+      ${range()}
       <label>De <input type="date" name="from" value="${escape(contexts.from)}"></label>
       <label>Até <input type="date" name="to" value="${escape(contexts.to)}"></label>
-      <button type="submit" class="button primary">Aplicar</button>
+      <button type="submit" class="button secondary">Aplicar</button>
       <button type="button" class="button secondary" id="clear-dates">Limpar</button>
-    </form>` +
-    '<div class="stack dashboard-controls">' + panel('Jornadas registradas neste painel',
-      '<div class="cards">' + metric('Sessões acompanhadas', integer.format(traffic.sessions)) +
-      metric('Visitas registradas', integer.format(traffic.pageViews)) +
-      metric('Pedidos de jornada', integer.format(counts.testOrders)) +
-      metric('Confirmados em teste', integer.format(counts.testPaid)) +
-      metric('Valor confirmado em teste', money(counts.testRevenue)) + '</div>', traffic.limit ? 'Últimos 1.000 eventos' : '') +
-    '<div class="columns">' + panel('Sessões por etapa', bars(traffic.sessionsByPage.map(row => ({
-      name: trackedLabels[row.page], count: row.count,
-    })))) + panel('Visitas registradas por dia', bars(traffic.daily.map(({ day, count }) => ({
-      name: day.slice(5).split('-').reverse().join('/'), count,
-    })))) + '</div>' + panel('Controles da demonstração', '<form id="dashboard-settings">' +
-      dashboardControls.map(([id, label]) => `<label class="control-row checkbox"><span>${label}</span>
-        <input type="checkbox" data-dashboard-setting="${id}"${checked(pendingSettings[id] ?? state.settings[id])}></label>`).join('') + '</form>') + '</div>';
+    </form>
+    <div class="overview-period"><p class="muted">Período: ${escape(periodLabel)}${traffic.limit ? ' · últimos 1.000 registros' : ''}</p>
+      <button type="button" class="button secondary" id="live-refresh" aria-pressed="${liveRefresh}">Atualização automática</button></div>
+    <div class="admin-kpi-grid">
+      ${steps.toReversed().map(([label, count, description]) => kpi(label, integer.format(count), description)).join('')}
+      ${[
+        ['Conversão PIX', funnel.paid, 'Sessões com PIX de teste confirmado'],
+        ['Conversão da seleção', funnel.selection, 'Sessões que abriram o resumo'],
+        ['Conversão do CEP', funnel.postal, 'Sessões que encontraram a região'],
+      ].map(([label, count, description]) => kpi(label, ratio(count) + '%', description, true)).join('')}
+    </div>
+    <div class="admin-funnel">
+      ${[steps[0], steps[1], [steps[2][0], funnel.paid]].map(([label, count]) => `
+        <div class="admin-funnel-row"><span>${label}</span><meter aria-label="${label}" min="0" max="${Math.max(traffic.sessions, count, 1)}" value="${count}"></meter>
+          <strong>${ratio(count)}%</strong></div>`).join('')}
+    </div>
+    <section class="admin-native-funnel">
+      <div class="admin-native-funnel-head"><h2>Funil de conversão</h2><span class="badge">Base: ${integer.format(traffic.sessions)}</span></div>
+      <p>Sessões únicas que passaram por cada página.</p>
+      <div class="admin-native-funnel-track">
+        ${traffic.sessionsByPage.map(row => `<div class="admin-native-stage">
+          <span>${trackedLabels[row.page]}</span><strong>${integer.format(row.count)}</strong>
+          <meter aria-label="${trackedLabels[row.page]}" min="0" max="${Math.max(1, traffic.sessions)}" value="${row.count}"></meter>
+          <span>${ratio(row.count)}% das sessões</span>
+        </div>`).join('')}
+      </div>
+    </section>
+    <div class="stack dashboard-controls">
+      ${panel('Conversão por gateway', table(['Gateway', 'PIX de teste', 'Confirmados', 'Conversão', 'Valor confirmado'], journeyGatewaySales.map(row => [
+        escape(row.name), integer.format(row.orders), integer.format(row.paid), ratio(row.paid, row.orders) + '%', money(row.revenue),
+      ])))}
+      ${panel('Controle do funil', '<form id="dashboard-settings">' + dashboardControls.map(([id, label]) =>
+        `<label class="control-row checkbox"><span>${label}</span><input type="checkbox" data-dashboard-setting="${id}"${checked(pendingSettings[id] ?? state.settings[id])}></label>`).join('') + '</form>')}
+      ${panel('Gateways PIX', '<a class="button secondary" href="#gateways">Configurar gateways</a>')}
+      ${panel('Visitas por dia', bars(traffic.daily.map(({ day, count }) => ({ name: displayDay(day), count }))))}
+    </div>`;
+}
+
+function displayDay(day) {
+  return day?.split('-').reverse().join('/') || '—';
 }
 
 function pagination(result) {
@@ -200,22 +265,25 @@ function listView(kind, data) {
     <label>Estado <select name="status"><option value="">Todos</option>${orderStatuses.map(status =>
       `<option${selected(status === contexts.status)}>${status}</option>`).join('')}</select></label>`;
   const columns = sales ? ['Pedido', 'Origem', 'Gateway', 'Valor', 'Estado', ''] :
-    ['Sessão', 'Cidade', 'Origem', 'Etapa mais avançada', 'Gateway', 'Estado do pedido', ''];
+    ['Lead', 'Origem', 'Oferta', 'Jornada', 'Pagamentos', 'Valor', 'Atualizado'];
   const rows = data.items.map(row => sales
     ? [escape(row.id), 'Jornada acompanhada', escape(row.gateway || '—'), money(row.total),
       escape(row.status), `<button type="button" class="button secondary" data-order="${escape(row.id)}">Ver pedido</button>`]
-    : [escape(row.name), escape(row.city || '—'), escape(row.origin), escape(row.steps.at(-1)), escape(row.gateway || '—'), escape(row.status || '—'),
-      `<button type="button" class="button secondary" data-lead="${escape(row.id)}">Detalhes</button>`]);
+    : [`<button type="button" class="lead-link" data-lead="${escape(row.id)}">${escape(row.name)}</button>`, escape(row.origin),
+      row.orderId ? 'Pedido de teste' : '—', escape(row.steps.at(-1)),
+      escape([row.status, row.gateway].filter(Boolean).join(' · ') || '—'),
+      row.total === undefined ? '—' : money(row.total), row.updatedAt ? date.format(new Date(row.updatedAt)) : displayDay(row.updatedOn)]);
   const summary = sales && data.audit ? panel('Auditoria de faturamento simulado', table(['Estado', 'Pedidos', 'Valor total'],
     data.audit.map(row => [escape(row.name), integer.format(row.orders), money(row.cents)]))) : '';
   return title(sectionNames[kind], 'Consulte e exporte registros demonstrativos por período.') + range() + '</div><div class="stack">' +
     summary +
-    panel(listTitle, `<form id="filters" class="controls">
-      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="Buscar registros"></label>${filters}
-      <button class="button primary" type="submit">Filtrar</button>
+    panel(listTitle, `<form id="filters" class="controls admin-toolbar">
+      <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="${sales ? 'Pedido ou sessão' : 'Sessão ou ID do pedido'}"></label>${filters}
+      <button class="button secondary" type="submit">Filtrar</button>
       <a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind }))}">Exportar CSV</a>
-      </form>` + table(columns, rows, sales ? undefined : data.items) + pagination(data),
-      data.limited ? 'Últimos 1.000 eventos acompanhados' : '') + '</div>';
+      ${sales ? '' : '<button class="button secondary" type="button" id="refresh-leads">Atualizar</button><button class="button secondary" type="button" id="lookup-leads">Consultar transações</button>'}
+      </form><div class="admin-table-wrap">` + table(columns, rows, sales ? undefined : data.items) + '</div>' + pagination(data),
+      data.limited ? 'Últimos 1.000 eventos acompanhados' : integer.format(data.total)) + '</div>';
 }
 
 function gatewayView(data) {
@@ -253,6 +321,17 @@ function trackingCards(channels) {
         `<option>${escape(mode)}</option>`).join('')}</select></label>
       <button type="submit" class="button secondary">Enfileirar teste</button>
     </form>`, 'Simulação')).join('');
+}
+
+function pixelSettings() {
+  const platforms = ['Meta', 'TikTok'];
+  const settings = platforms.map(channel => panel(`Pixel do ${channel}`, `<div class="checks">${eventTypes.map(event =>
+    `<label><input type="checkbox" data-pixel-event="${event}" data-key="${channel}"${checked((pendingTracking[channel] ?? state.settings.tracking[channel]).includes(event))}>${event}</label>`).join('')}</div>`, 'Simulação'));
+  const tests = platforms.map(channel => `<form class="controls diagnostic-form" data-channel="${channel}">
+    <label>Cenário do ${channel}<select name="mode">${state.diagnostics[channel].map(mode => `<option>${escape(mode)}</option>`).join('')}</select></label>
+    <button type="submit" class="button secondary">Testar ${channel}</button></form>`);
+  return '<div class="stack"><form id="tracking-settings" class="stack">' + settings.join('') + '</form>' +
+    panel('Teste rápido', '<div class="columns">' + tests.join('') + '</div>') + '</div>';
 }
 
 function queueView() {
@@ -310,6 +389,8 @@ async function render() {
   const current = ++sequence;
   const active = section();
   nav(active);
+  document.querySelector('.path').textContent = active === 'overview' ? 'Painel Administrativo' : sectionNames[active];
+  document.querySelector('#topbar-description').hidden = active !== 'overview';
   updateSettingsButton();
   view.setAttribute('aria-busy', 'true');
   try {
@@ -338,9 +419,8 @@ async function render() {
           ({ name: trackedLabels[row.page], count: row.count })))) + '</div>',
       catalog: catalogView,
       gateways: () => gatewayView(data),
-      tracking: () => title('Tracking', 'Consulte os eventos recebidos no período e teste os canais de anúncios.') + range() + '</div>' +
-        panel('Eventos do site', bars(response.pixel), response.limited ? 'Últimos 1.000 registros por consulta' : 'Medição própria') +
-        '<div class="columns">' + trackingCards(['Meta','TikTok']) + '</div>',
+      tracking: () => title('Tracking', 'Configure os eventos e consulte a atividade registrada.') + range() + '</div><div class="stack">' +
+        pixelSettings() + panel('Eventos do site', bars(response.pixel), response.limited ? 'Últimos 1.000 registros por consulta' : 'Medição própria') + '</div>',
       utmfy: () => title('UTMfy e Pushcut', 'Valide eventos e notificações com registros de teste.') + '</div><div class="stack">' +
         '<div class="columns">' + trackingCards(['UTMfy','Pushcut']) + '</div>' + panel('Histórico de testes', auditTable(placeholderHistory.filter(entry => entry.detail !== 'SMSMais'))) + '</div>',
       sms: () => title('SMS e remarketing', 'Teste o registro de eventos da integração em modo de demonstração.') + '</div><div class="stack">' +
@@ -369,6 +449,16 @@ async function render() {
     if (current === sequence) view.removeAttribute('aria-busy');
   }
 }
+
+navigation.addEventListener('click', event => {
+  const link = event.target.closest('a');
+  if (!link || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  const url = new URL(link.href);
+  event.preventDefault();
+  if (url.pathname === location.pathname && url.hash === location.hash) return;
+  history.pushState(null, '', url.pathname + url.hash);
+  window.dispatchEvent(new Event('hashchange'));
+});
 
 async function command(type, key, value) {
   updatesInFlight++;
@@ -411,6 +501,16 @@ async function showOrder(id) {
     ${order.payment ? `<p class="empty">${escape(order.gateway)} · ${escape(order.payment.code)}</p>` : ''}
     ${actions}<p id="order-feedback" class="empty" role="status" hidden></p>`);
 }
+
+details.addEventListener('submit', async event => {
+  if (event.target.id !== 'lead-order-lookup') return;
+  event.preventDefault();
+  const reference = new FormData(event.target).get('reference').trim();
+  if (!reference) return;
+  const message = event.target.querySelector('[role=status]');
+  try { await showOrder(reference); }
+  catch (error) { message.textContent = error.message; }
+});
 
 details.addEventListener('click', async event => {
   const button = event.target.closest('button[data-order-action]');
@@ -465,6 +565,7 @@ view.addEventListener('submit', async event => {
   const form = event.target;
   const entries = Object.fromEntries(new FormData(form));
   if (form.id === 'date-filter') {
+    if (!entries.from && !entries.to && form.querySelector('#period').value !== 'custom') return;
     if (!entries.from || !entries.to || entries.from > entries.to || Date.parse(entries.to) - Date.parse(entries.from) > 89 * 86400000) {
       notice('Informe um intervalo de até 90 dias.', true);
       return;
@@ -474,12 +575,14 @@ view.addEventListener('submit', async event => {
     await render();
     return;
   }
-  if (form.id === 'dashboard-settings') {
-    if (!Object.keys(pendingSettings).length) return;
+  if (form.id === 'dashboard-settings' || form.id === 'tracking-settings') {
+    const tracking = form.id === 'tracking-settings';
+    const pending = tracking ? pendingTracking : pendingSettings;
+    if (!Object.keys(pending).length) return;
     saveSettings.disabled = true;
     try {
-      await command('features', null, { ...pendingSettings });
-      for (const key of Object.keys(pendingSettings)) delete pendingSettings[key];
+      await command(tracking ? 'tracking-settings' : 'features', null, { ...pending });
+      for (const key of Object.keys(pending)) delete pending[key];
     } catch (error) { notice(error.message, true); await render(); }
     finally { updateSettingsButton(); }
     return;
@@ -519,7 +622,8 @@ view.addEventListener('submit', async event => {
 view.addEventListener('change', async event => {
   const { target } = event;
   if (target.id === 'period') {
-    contexts.days = Number(target.value);
+    if (target.value === 'custom') { view.querySelector('[name=from]')?.focus(); return; }
+    contexts.days = target.value;
     contexts.from = '';
     contexts.to = '';
     contexts.page = 1;
@@ -530,6 +634,16 @@ view.addEventListener('change', async event => {
     const key = target.dataset.dashboardSetting;
     if (target.checked === state.settings[key]) delete pendingSettings[key];
     else pendingSettings[key] = target.checked;
+    updateSettingsButton();
+    return;
+  }
+  if (target.dataset.pixelEvent) {
+    const channel = target.dataset.key;
+    const enabled = [...view.querySelectorAll('input[data-pixel-event]:checked')]
+      .filter(input => input.dataset.key === channel).map(input => input.dataset.pixelEvent);
+    const saved = state.settings.tracking[channel];
+    if (enabled.length === saved.length && enabled.every(event => saved.includes(event))) delete pendingTracking[channel];
+    else pendingTracking[channel] = enabled;
     updateSettingsButton();
     return;
   }
@@ -550,7 +664,7 @@ view.addEventListener('click', async event => {
   if (!button) return;
   try {
     if (button.id === 'clear-dates') {
-      Object.assign(contexts, { from: '', to: '', page: 1 });
+      Object.assign(contexts, { days: 'all', from: '', to: '', page: 1 });
       notice('');
       await render();
     }
@@ -560,6 +674,14 @@ view.addEventListener('click', async event => {
       scheduleRefresh();
     }
     if (button.id === 'refresh-tracking') await render();
+    if (button.id === 'refresh-leads') await render();
+    if (button.id === 'lookup-leads') {
+      showDetails('Consultar transações', `<form id="lead-order-lookup" class="controls">
+        <label>Pedido ou código PIX de teste<input name="reference" required maxlength="100"></label>
+        <button type="submit" class="button primary">Consultar</button><p class="muted" role="status"></p>
+      </form>`);
+      details.querySelector('[name=reference]').focus();
+    }
     if (button.id === 'process-queue') await command('queue-process');
     if (button.id === 'select-reminders') {
       const boxes = [...button.form.querySelectorAll('input[name="reminder"]')];
@@ -579,10 +701,11 @@ view.addEventListener('click', async event => {
 
 try {
   const linkedPeriod = new URLSearchParams(location.search);
-  if ([7, 14, 30].includes(Number(linkedPeriod.get('days')))) contexts.days = Number(linkedPeriod.get('days'));
+  if (periodOptions.some(([key]) => key !== 'custom' && key === linkedPeriod.get('days'))) contexts.days = linkedPeriod.get('days');
   if (linkedPeriod.has('from') && linkedPeriod.has('to')) Object.assign(contexts, { from: linkedPeriod.get('from'), to: linkedPeriod.get('to') });
   const mode = await api('mode');
-  if (mode.local) {
+  localMode = mode.local;
+  if (localMode) {
     const fields = document.querySelector('#credentials');
     fields.hidden = true;
     for (const input of fields.querySelectorAll('input')) input.disabled = true;

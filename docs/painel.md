@@ -30,7 +30,9 @@ Em **Leads**, filtre as sessões por gateway ou estado do pedido. Clique na linh
 
 A migração de arquivamento guarda o estado operacional anterior em `campaign_admin_archive` e tira as visitas e eventos antigos dos relatórios. O catálogo e as configurações continuam disponíveis. Os relatórios começam vazios e passam a mostrar as ações registradas no ambiente atual.
 
-Na **Visão geral**, escolha um período padrão ou aplique um intervalo de até 90 dias. As opções de catálogo e comparação de gateways ficam pendentes até você clicar em **Salvar configurações**.
+Na **Visão geral**, escolha um período padrão ou aplique um intervalo de até 90 dias. Os indicadores de conversão contam sessões únicas que alcançaram o CEP, abriram a seleção ou tiveram PIX confirmado em teste. As opções de catálogo, comparação de gateways e eventos de Meta e TikTok ficam pendentes na respectiva seção até clicar em **Salvar configurações**.
+
+As novas visitas incluem data e hora na lista de Leads e no overlay. Visitas de versões anteriores exibem a data registrada. As tabelas de métricas preservam a proteção por linha e o acesso administrativo usa o servidor.
 
 Os eventos configurados no painel entram na fila local durante a jornada acompanhada. `PageView` registra cada página uma vez por sessão e dia, `ViewContent` registra a abertura da oferta e `Lead` é enfileirado uma vez por sessão após o envio válido do formulário. A fila preserva os itens pendentes e mantém até 300 registros.
 

@@ -23,7 +23,7 @@ export function leadDetails({ request, openOrder, escape, money, date, table, pe
     const ordered = orders.toSorted((first, next) => next.createdAt.localeCompare(first.createdAt));
     const latest = ordered[0];
     const journey = lead.visits
-      ? lead.visits.map(row => `${day(row.day)} · ${row.title}`)
+      ? lead.visits.map(row => `${row.at ? when(row.at) : day(row.day)} · ${row.title}`)
       : lead.steps;
     const activity = (lead.activity || []).map(row => `${when(row.at)} · ${row.title}`);
     title.textContent = lead.name;
@@ -33,26 +33,23 @@ export function leadDetails({ request, openOrder, escape, money, date, table, pe
     actions.innerHTML = `
       <button type="button" class="button primary" data-lead-action="lookup"${latest ? '' : ' disabled'}>Consultar transação</button>
       <button type="button" class="button secondary" data-lead-action="copy-link">Copiar link da sessão</button>
-      <button type="button" class="button secondary" data-lead-action="copy-json">Copiar JSON</button>
       <button type="button" class="button secondary" data-lead-action="refresh">Atualizar dados</button>`;
     main.innerHTML = card('Visão geral', fields([
       ['Primeiro registro', lead.startedOn ? day(lead.startedOn) : when(lead.createdAt)],
       ['Páginas e etapas', lead.steps.length], ['Eventos da jornada', activity.length],
       ['Situação do último pedido', latest?.status || 'Sem pedido'],
     ]), true) +
-      card('Identidade e contato', fields([
-        ['Identificação', lead.name], ['E-mail', 'Não armazenado'], ['Telefone', 'Não armazenado'],
-      ])) +
-      card('Região e entrega', fields([['Cidade', lead.city || 'Não armazenada'], ['CEP', 'Não armazenado']])) +
-      card('Origem e tracking', fields([['Origem', lead.origin], ['Posicionamento', lead.placement || '—']])) +
-      card('Dispositivo e sessão', fields([['Dispositivo', lead.device || 'Não armazenado'], ['Identificador', lead.id]])) +
-      card('Pedidos e ofertas', table(['Pedido', 'Gateway', 'Valor', 'Estado', ''],
+      card('Identificação', fields([['Lead', lead.name], ['Identificador', lead.id]])) +
+      card('Origem e tracking', fields([['Origem', lead.origin], ['Etapa', lead.steps.at(-1)]])) +
+      card('Pagamento e oferta', table(['Pedido', 'Gateway', 'Valor', 'Estado', ''],
         ordered.map(order => [escape(order.id), escape(order.gateway || '—'), money(order.total), escape(order.status),
           `<button type="button" class="button secondary" data-lead-action="lookup" data-lead-order="${escape(order.id)}">Consultar</button>`])), true) +
       card('Consulta da transação', '<div id="lead-transaction" role="status"><p class="empty">Selecione um pedido para consultar.</p></div>', true) +
-      card('Páginas registradas', list(journey)) +
-      card('Eventos da jornada', list(activity)) +
-      card('Dados da sessão', `<details><summary>Ver JSON</summary><pre class="lead-data">${escape(JSON.stringify(data, null, 2))}</pre></details>`, true);
+      card('Jornada registrada', `<div class="columns"><div><h3>Páginas</h3>${list(journey)}</div>
+        <div><h3>Eventos</h3>${list(activity)}</div></div>`, true) +
+      `<section class="panel lead-wide"><div class="panel-head"><h2>Dados da sessão</h2>
+        <button type="button" class="button secondary" data-lead-action="copy-json">Copiar JSON</button></div>
+        <details><summary>Ver JSON</summary><pre class="lead-data">${escape(JSON.stringify(data, null, 2))}</pre></details></section>`;
   }
 
   async function open(id) {

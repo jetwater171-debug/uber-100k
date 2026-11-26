@@ -62,7 +62,7 @@ export function siteSessionHandler({ secret, store, now }) {
     }
     const at = new Date(now()).toISOString();
     const visit = { session: current.id, page, day: at.slice(0, 10) };
-    if (event === 'page_view') await store.recordTraffic(visit);
+    if (event === 'page_view') await store.recordTraffic({ ...visit, occurred_at: at });
     else await store.recordJourneyEvent({ ...visit, event, occurred_at: at });
     return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
   };
