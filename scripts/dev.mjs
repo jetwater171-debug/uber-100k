@@ -13,7 +13,7 @@ const port = Number(process.env.PORT || 4280);
 const admin = adminHandler({ auth: localAuth(), store: memoryStore() });
 const mime = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.webp': 'image/webp', '.woff2': 'font/woff2', '.mp4': 'video/mp4', '.json': 'application/json',
+  '.webp': 'image/webp', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.json': 'application/json',
 };
 
 await build();

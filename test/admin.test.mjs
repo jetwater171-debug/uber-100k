@@ -496,6 +496,27 @@ test('view requests return one consistent snapshot with section-specific records
   assert.equal((await request('view', { query: { section: 'outside' } })).status, 404);
 });
 
+test('gateway routing saves the full priority atomically and tests saved statuses', async () => {
+  const { request, login } = fixture();
+  await login();
+  const view = async () => (await request('view', { query: { section: 'gateways' } })).json();
+  const before = await view();
+  assert.equal(before.data.dailyGatewaySales.length, gateways.length);
+  const ordered = before.state.settings.gateways.toReversed()
+    .map((gateway, index) => ({ ...gateway, enabled: index !== 0 }));
+  const command = (type, value, version) => request('command', { body: { type, value, version } });
+  assert.equal((await command('gateway-settings', ordered.slice(1), before.state.version)).status, 400);
+  assert.equal((await command('gateway-settings', ordered, before.state.version)).status, 200);
+  assert.equal((await command('gateway-settings', ordered.toReversed(), before.state.version)).status, 409);
+  const saved = await view();
+  assert.deepEqual(saved.state.settings.gateways, ordered);
+  const response = await command('pix-batch', ordered.slice(0, 2).map(entry => entry.name), saved.state.version);
+  assert.equal(response.status, 200);
+  const { result } = await response.json();
+  assert.equal(result.checks[0].code, undefined);
+  assert.match(result.checks[1].code, /^SIMULACAO-/);
+});
+
 test('Supabase store checks login limits and sends compare-and-swap and deduplicated insert requests', async () => {
   const requests = [];
   const store = supabaseStore({

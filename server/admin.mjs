@@ -71,6 +71,12 @@ function amend(state, command, at, siteOrigin) {
       if (!gateways.includes(key) || typeof value !== 'boolean') break;
       state.settings.gateways.find(gateway => gateway.name === key).enabled = value;
       return { title: 'Gateway de teste atualizado', detail: key };
+    case 'gateway-settings':
+      if (!Array.isArray(value) || value.length !== gateways.length ||
+          new Set(value.map(entry => entry?.name)).size !== gateways.length ||
+          !value.every(entry => gateways.includes(entry?.name) && typeof entry.enabled === 'boolean')) break;
+      state.settings.gateways = value.map(({ name, enabled }) => ({ name, enabled }));
+      return { title: 'Configurações dos gateways salvas', detail: `${value.filter(entry => entry.enabled).length} ativos em teste` };
     case 'priority':
       if (!gateways.includes(key) || ![-1, 1].includes(value)) break;
       {
@@ -89,13 +95,21 @@ function amend(state, command, at, siteOrigin) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) break;
       const entries = Object.entries(value);
       if (!entries.length || !entries.every(([channel, events]) =>
-        ['Meta', 'TikTok'].includes(channel) && Array.isArray(events) && events.every(event => eventTypes.includes(event)))) break;
+        channels.includes(channel) && Array.isArray(events) && events.every(event => eventTypes.includes(event)))) break;
       for (const [channel, events] of entries) state.settings.tracking[channel] = [...new Set(events)];
       return { title: 'Configurações de tracking salvas', detail: entries.map(([channel]) => channel).join(', ') };
     }
     case 'pix':
       if (!state.settings.gateways.some(gateway => gateway.name === key && gateway.enabled)) break;
       return { title: 'PIX de teste', detail: key, code: `SIMULACAO-${randomUUID()}`, status: 'Simulado · sem cobrança' };
+    case 'pix-batch': {
+      if (!Array.isArray(value) || !value.length || value.length > gateways.length || !value.every(name => gateways.includes(name))) break;
+      const checks = [...new Set(value)].map(name => {
+        const enabled = state.settings.gateways.find(entry => entry.name === name)?.enabled;
+        return enabled ? { name, code: `SIMULACAO-${randomUUID()}` } : { name };
+      });
+      return { title: 'Teste de gateways registrado', detail: `${checks.length} selecionados`, status: 'Simulação', checks };
+    }
     case 'integration-test':
       if (!channels.includes(key)) break;
       return queueTest(state, key, at, value);
@@ -170,6 +184,7 @@ async function viewReport(store, params, time, siteOrigin) {
     state.queue = snapshot.queue.filter(job => job.event === 'Remarketing');
   }
   if (section === 'queue') state.queue = snapshot.queue;
+  if (section === 'utmfy') state.queue = snapshot.queue.filter(job => ['UTMfy', 'Pushcut'].includes(job.channel));
   if (section === 'domains') return {
     state,
     domains: {
@@ -200,7 +215,7 @@ async function viewReport(store, params, time, siteOrigin) {
     return { state, data: { ...filterRows(records.rows, params, leadFields), limited: records.limited } };
   }
   if (section === 'sales') return {
-    state, data: { ...filterRows(orders, params, saleFields), audit: salesAudit(matchingRows(orders, params, saleFields)) },
+    state, data: { ...overview, ...filterRows(orders, params, saleFields), audit: salesAudit(matchingRows(orders, params, saleFields)) },
   };
   if (section === 'activity' || section === 'navigation') {
     const [events, traffic] = await Promise.all([
@@ -213,11 +228,19 @@ async function viewReport(store, params, time, siteOrigin) {
     }));
     return { state, data: overview, traffic, journey: { ...journey, recent } };
   }
-  if (section === 'overview') {
+  if (section === 'overview' || section === 'gateways') {
     const [traffic, events] = await Promise.all([trafficReport(store, since, until), store.readJourneyEvents(since, undefined, until)]);
     const reached = event => new Set(events.filter(row => row.event === event).map(row => row.session)).size;
+    const today = new Date(time).toISOString().slice(0, 10);
+    const dailyGatewaySales = section === 'gateways' ? gateways.map(name => {
+      const records = snapshot.orders.filter(order => order.gateway === name);
+      const created = records.filter(order => order.payment?.createdAt?.startsWith(today));
+      const confirmed = order => order.status === status.paid;
+      return { name, orders: created.length, converted: created.filter(confirmed).length,
+        paid: records.filter(order => confirmed(order) && order.resolvedAt?.startsWith(today)).length };
+    }) : undefined;
     return { state, data: {
-      ...overview, lastActivity: events[0]?.occurred_at,
+      ...overview, lastActivity: events[0]?.occurred_at, dailyGatewaySales,
       funnel: { postal: reached('lookup_resolved'), selection: reached('selection_opened'),
         paid: new Set(orders.filter(order => order.status === status.paid).map(order => order.sessionId)).size },
     }, traffic };

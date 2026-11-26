@@ -1,3 +1,4 @@
+import { gatewayTemplate, populateGateways, setGatewayCardOpen } from './gateways.js?v=1';
 import { leadDetails } from './lead-details.js?v=4';
 
 const navigation = document.querySelector('#navigation');
@@ -37,6 +38,12 @@ const dashboardControls = [
 ];
 const pendingSettings = {};
 const pendingTracking = {};
+const gatewaySettings = document.querySelector('#gateway-settings');
+const testGateways = document.querySelector('#test-gateways');
+const expandedGateways = new Set();
+let gatewayDraft;
+let gatewayMarkup;
+let gatewayReport;
 let operator;
 let localMode = false;
 let state;
@@ -81,10 +88,14 @@ function openLinkedLead() {
 }
 
 function updateSettingsButton() {
-  const tracking = section() === 'tracking';
-  saveSettings.hidden = !operator || (!tracking && section() !== 'overview');
-  saveSettings.setAttribute('form', tracking ? 'tracking-settings' : 'dashboard-settings');
-  saveSettings.disabled = !Object.keys(tracking ? pendingTracking : pendingSettings).length || updatesInFlight > 0;
+  const active = section();
+  const tracking = ['tracking', 'utmfy', 'sms'].includes(active);
+  const gateways = active === 'gateways';
+  testGateways.hidden = !operator || !gateways;
+  saveSettings.hidden = !operator || !(tracking || gateways || active === 'overview');
+  saveSettings.setAttribute('form', gateways ? 'gateway-settings' : tracking ? 'tracking-settings' : 'dashboard-settings');
+  const dirty = gateways ? Boolean(gatewayDraft) : Object.keys(tracking ? pendingTracking : pendingSettings).length > 0;
+  saveSettings.disabled = !dirty || updatesInFlight > 0;
 }
 
 function notice(message, error = false) {
@@ -103,6 +114,9 @@ function account(user) {
   if (!user) {
     view.replaceChildren();
     leadDialog.close();
+    gatewayDraft = undefined;
+    gatewayReport = undefined;
+    expandedGateways.clear();
     for (const key of Object.keys(pendingSettings)) delete pendingSettings[key];
     for (const key of Object.keys(pendingTracking)) delete pendingTracking[key];
   }
@@ -111,13 +125,16 @@ function account(user) {
 }
 
 function nav(active) {
-  navigation.innerHTML = groups.map(([group, ...links]) => (group ? '<p class="nav-label">' + group + '</p>' : '') +
-    links.map(([id, label]) => `<a href="${sectionPaths[id]}#${id}"${id === active ? ' aria-current="page"' : ''}>${label}</a>`).join('')).join('');
+  navigation.innerHTML = groups.map(([group, ...links]) => {
+    const items = links.map(([id, label]) => `<a class="admin-nav-item" href="${sectionPaths[id]}"${id === active ? ' aria-current="page"' : ''}>${label}</a>`).join('');
+    return group ? `<details class="admin-extra-nav"${links.some(([id]) => id === active) ? ' open' : ''}>
+      <summary>${group}</summary><div>${items}</div></details>` : items;
+  }).join('');
 }
 
 function title(name, copy) {
-  return `<div class="view-header"><div><p class="eyebrow">Ambiente de protótipo</p>
-    <h1>${escape(name)}</h1><p class="muted">${escape(copy)}</p></div>`;
+  return `<div class="view-header"><div><h2 class="section-heading">${escape(name)}</h2>
+    <p class="muted">${escape(copy)}</p></div>`;
 }
 
 const periodOptions = [
@@ -127,7 +144,7 @@ const periodOptions = [
 
 function range() {
   const value = contexts.from ? 'custom' : String(contexts.days);
-  return `<label>Período <select id="period">${periodOptions.filter(([key]) => key !== 'custom' || section() === 'overview' || value === key)
+  return `<label>Período <select id="period">${periodOptions.filter(([key]) => key !== 'custom' || ['overview', 'sales', 'audience'].includes(section()) || value === key)
     .map(([key, label]) => `<option value="${key}"${selected(key === value)}>${label}</option>`).join('')}</select></label>`;
 }
 
@@ -202,13 +219,7 @@ function dashboard(data, traffic) {
       </div>
       <div class="admin-hero-highlight"><span>Sessões registradas</span><strong>${integer.format(traffic.sessions)}</strong><em>No período</em></div>
     </div>
-    <form id="date-filter" class="overview-range">
-      ${range()}
-      <label>De <input type="date" name="from" value="${escape(contexts.from)}"></label>
-      <label>Até <input type="date" name="to" value="${escape(contexts.to)}"></label>
-      <button type="submit" class="button secondary">Aplicar</button>
-      <button type="button" class="button secondary" id="clear-dates">Limpar</button>
-    </form>
+    ${dateToolbar()}
     <div class="overview-period"><p class="muted">Período: ${escape(periodLabel)}${traffic.limit ? ' · últimos 1.000 registros' : ''}</p>
       <button type="button" class="button secondary" id="live-refresh" aria-pressed="${liveRefresh}">Atualização automática</button></div>
     <div class="admin-kpi-grid">
@@ -250,6 +261,88 @@ function displayDay(day) {
   return day?.split('-').reverse().join('/') || '—';
 }
 
+function dateToolbar() {
+  return `<form id="date-filter" class="overview-range">
+    ${range()}
+    <label>De <input type="date" name="from" value="${escape(contexts.from)}"></label>
+    <label>Até <input type="date" name="to" value="${escape(contexts.to)}"></label>
+    <button type="submit" class="button secondary">Aplicar</button>
+    <button type="button" class="button secondary" id="clear-dates">Limpar</button>
+  </form>`;
+}
+
+function metrics(cards) {
+  return '<div class="admin-kpi-grid report-metrics">' + cards.map(([label, value, info]) => `
+    <div class="admin-kpi"><span>${escape(label)}</span><strong>${escape(value)}</strong>
+      <em>${escape(info)}</em></div>`).join('') + '</div>';
+}
+
+function pageCards(items) {
+  return '<div class="admin-pages-grid">' + items.map(({ name, count, detail }) =>
+    `<article class="admin-page-card"><h3>${escape(name)}</h3><strong>${integer.format(count)}</strong><span>${escape(detail)}</span></article>`).join('') + '</div>';
+}
+
+function pagesView(traffic) {
+  const counts = traffic.sessionsByPage;
+  const leader = counts.toSorted((first, next) => next.count - first.count).find(row => row.count);
+  const final = counts.at(-1).count;
+  return panel('Insights do funil', '<p class="muted report-caption">Compare o alcance de cada etapa da jornada.</p>' +
+    metrics([['Sessões', traffic.sessions, 'Visitantes no período'], ['Pageviews', traffic.pageViews, 'Páginas registradas'],
+      ['Etapa com mais sessões', leader ? trackedLabels[leader.page] : '—', 'Maior alcance'],
+      ['Análise e ofertas', final, 'Sessões na última página']]), 'Diagnóstico') +
+    panel('Páginas e fluxo', pageCards(traffic.rows.map((row, index) =>
+      ({ name: trackedLabels[row.page], count: row.count, detail: integer.format(counts[index].count) + ' sessões únicas' }))) +
+      `<div class="controls report-actions">${liveControls()}<button type="button" id="refresh-tracking" class="button secondary">Atualizar</button>
+      <a href="/?analytics=demo" target="_blank" rel="noopener" class="button secondary">Abrir jornada de teste</a></div>`, 'Pageviews');
+}
+
+function audienceView(traffic, data) {
+  const top = traffic.furthestPages.toSorted((a, b) => b.count - a.count).find(row => row.count);
+  return panel('Radar de público', `<div class="admin-hero">
+    <div><h3>Público da campanha</h3><p>Confira onde as sessões chegam no funil e exporte o ranking por etapa.</p>
+      <div class="admin-hero-tags"><span class="admin-tag">Etapa mais frequente: ${top ? escape(trackedLabels[top.page]) : '—'}</span>
+      <span class="admin-tag">${integer.format(traffic.pageViews)} visitas registradas</span></div>
+      <div class="report-actions"><button id="refresh-tracking" class="button secondary" type="button">Atualizar público</button></div>
+    </div><div class="admin-hero-highlight"><span>Sessões registradas</span><strong>${integer.format(traffic.sessions)}</strong><em>${data.counts.testPaid} PIX confirmados em teste</em></div>
+    </div>` + dateToolbar(), 'Sessões') +
+    panel('Exportar público', `<a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind: 'audience' }))}">Exportar público CSV</a>`) +
+    panel('Ranking detalhado', '<div class="columns">' +
+      panel('Sessões por etapa', bars(traffic.sessionsByPage.map(row => ({ ...row, name: trackedLabels[row.page] })))) +
+      panel('Etapa mais avançada', bars(traffic.furthestPages.map(row => ({ ...row, name: trackedLabels[row.page] })))) + '</div>');
+}
+
+function navigationView(traffic, journey) {
+  const returns = new Map(journey.returns.map(row => [row.name, row.count]));
+  const names = { ...trackedLabels, inicio: 'Início', regiao: 'Disponibilidade por região' };
+  const records = traffic.rows.map(row => ({ name: names[row.page], count: returns.get(names[row.page]) || 0, visits: row.count }));
+  const top = records.toSorted((first, next) => next.count - first.count).find(row => row.count);
+  const percent = record => record?.visits ? (record.count * 100 / record.visits).toFixed(1).replace('.', ',') + '%' : '—';
+  return panel('Resumo rápido', metrics([
+    ['Retornos', records.reduce((sum, item) => sum + item.count, 0), 'Por sessão e página'],
+    ['Página com mais retornos', top?.name || '—', 'Maior volume no período'],
+    ['Taxa de retorno dessa página', percent(top), 'Retornos / pageviews'],
+  ]) + range(), 'Navegação') +
+    panel('Top etapas', bars(journey.returns), 'Ranking') +
+    panel('Detalhe por página', pageCards(records.map(row => ({ ...row, detail: percent(row) + ' de retorno' }))), 'Retornos');
+}
+
+function salesOverview(data) {
+  const leading = data.journeyGatewaySales.toSorted((a, b) => b.revenue - a.revenue).find(row => row.paid);
+  const cards = data.journeyGatewaySales.map(row => `<button type="button" class="gateway-sales-card${row.name === contexts.gateway ? ' is-active' : ''}"
+    data-sales-gateway="${escape(row.name)}" aria-pressed="${row.name === contexts.gateway}">
+    <div class="gateway-sales-card__top"><strong>${escape(row.name)}</strong></div>
+    <span class="gateway-sales-card__value">${money(row.revenue)}</span>
+    <div class="gateway-sales-card__meta"><span>${integer.format(row.paid)} confirmados</span><span>${integer.format(row.orders)} PIX</span></div>
+  </button>`);
+  return panel('Resumo bruto', `<div class="admin-hero"><div><h3>Auditoria de faturamento</h3>
+    <p>Consulte os valores dos pedidos confirmados no ambiente de teste.</p>
+    <div class="admin-hero-tags"><span class="admin-tag">Gateway líder: ${escape(leading?.name || '—')}</span>
+    <span class="admin-tag">Filtro atual: ${escape(contexts.gateway || 'Todos')}</span></div></div>
+    <div class="admin-hero-highlight"><span>Confirmado em teste</span><strong>${money(data.counts.testRevenue)}</strong>
+      <em>${integer.format(data.counts.testPaid)} pagamentos simulados</em></div></div>` + dateToolbar() +
+    `<div class="gateway-sales-grid">${cards.join('')}</div>`, `Base: ${integer.format(data.counts.testOrders)} pedidos`);
+}
+
 function pagination(result) {
   const total = Math.max(1, Math.ceil(result.total / result.perPage));
   return `<div class="paginate"><span>${result.total} registros · página ${result.page} de ${total}</span>
@@ -259,7 +352,7 @@ function pagination(result) {
 
 function listView(kind, data) {
   const sales = kind === 'sales';
-  const listTitle = sales ? 'Transações simuladas' : 'Sessões do protótipo';
+  const listTitle = sales ? 'Vendas do gateway' : 'Leads';
   const filters = `<label>Gateway <select name="gateway"><option value="">Todos</option>${state.settings.gateways.map(({ name }) =>
     `<option${selected(name === contexts.gateway)}>${escape(name)}</option>`).join('')}</select></label>
     <label>Estado <select name="status"><option value="">Todos</option>${orderStatuses.map(status =>
@@ -275,33 +368,39 @@ function listView(kind, data) {
       row.total === undefined ? '—' : money(row.total), row.updatedAt ? date.format(new Date(row.updatedAt)) : displayDay(row.updatedOn)]);
   const summary = sales && data.audit ? panel('Auditoria de faturamento simulado', table(['Estado', 'Pedidos', 'Valor total'],
     data.audit.map(row => [escape(row.name), integer.format(row.orders), money(row.cents)]))) : '';
-  return title(sectionNames[kind], 'Consulte e exporte registros demonstrativos por período.') + range() + '</div><div class="stack">' +
-    summary +
+  return (sales ? salesOverview(data) : '') + '<div class="stack">' +
     panel(listTitle, `<form id="filters" class="controls admin-toolbar">
+      ${sales ? '' : range()}
       <label>Buscar<input name="q" value="${escape(contexts.q)}" maxlength="100" placeholder="${sales ? 'Pedido ou sessão' : 'Sessão ou ID do pedido'}"></label>${filters}
       <button class="button secondary" type="submit">Filtrar</button>
       <a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind }))}">Exportar CSV</a>
       ${sales ? '' : '<button class="button secondary" type="button" id="refresh-leads">Atualizar</button><button class="button secondary" type="button" id="lookup-leads">Consultar transações</button>'}
       </form><div class="admin-table-wrap">` + table(columns, rows, sales ? undefined : data.items) + '</div>' + pagination(data),
-      data.limited ? 'Últimos 1.000 eventos acompanhados' : integer.format(data.total)) + '</div>';
+      data.limited ? 'Últimos 1.000 eventos acompanhados' : integer.format(data.total)) + summary + '</div>';
 }
 
-function gatewayView(data) {
-  const rows = state.settings.gateways.map(({ name, enabled }, index) =>
-    [String(index + 1), escape(name), `<label class="checkbox"><input type="checkbox" data-change="gateway" data-key="${escape(name)}"${checked(enabled)}>Ativo</label>`,
-      `<div class="controls">
-        <button type="button" title="Subir prioridade" aria-label="Subir prioridade de ${escape(name)}" class="button secondary" data-priority="-1" data-key="${escape(name)}"${index === 0 ? ' disabled' : ''}>↑</button>
-        <button type="button" title="Descer prioridade" aria-label="Descer prioridade de ${escape(name)}" class="button secondary" data-priority="1" data-key="${escape(name)}"${index === state.settings.gateways.length - 1 ? ' disabled' : ''}>↓</button>
-        <button type="button" class="button secondary" data-pix="${escape(name)}"${enabled ? '' : ' disabled'}>Testar PIX</button></div>`]);
-  const gatewaySales = data.journeyGatewaySales.map(row =>
-    [escape(row.name), integer.format(row.orders), integer.format(row.paid), money(row.revenue)]);
-  return title('Gateways PIX', 'Configure a ordem e gere comprovantes de teste dos seis gateways.') + range() + '</div><div class="stack">' +
-    panel('Prioridade dos gateways', table(['Ordem', 'Gateway', 'Modo de teste', 'Ações'], rows), 'Simulação') +
-    panel('Consulta de transação', `<form class="controls" id="transaction-lookup">
-      <label>Pedido ou código PIX de teste<input name="reference" required maxlength="100"></label>
-      <button type="submit" class="button secondary">Consultar</button></form>`) +
-    (state.settings.compareGateways ? panel('Desempenho das jornadas de teste', table(['Gateway', 'Pedidos com PIX', 'Confirmados', 'Valor confirmado em teste'], gatewaySales)) : '') +
-    '</div>';
+function updateGatewayView(focus) {
+  view.innerHTML = gatewayMarkup;
+  populateGateways(view, { ...gatewayReport, gateways: gatewayDraft ?? state.settings.gateways, expanded: expandedGateways });
+  if (focus) {
+    const row = [...view.querySelectorAll('[data-gateway-order-item]')].find(item => item.dataset.gatewayOrderItem === focus.name);
+    const move = row?.querySelector(`[data-gateway-order-move="${focus.direction}"]:enabled`) || row?.querySelector('.gateway-order-move:enabled');
+    move?.focus({ preventScroll: true });
+  }
+  updateSettingsButton();
+}
+
+function applyGatewayDraft(items, focus) {
+  gatewayDraft = JSON.stringify(items) === JSON.stringify(state.settings.gateways) ? undefined : items;
+  updateGatewayView(focus);
+}
+
+function moveGateway(name, targetIndex, direction) {
+  const items = [...(gatewayDraft ?? state.settings.gateways)];
+  const from = items.findIndex(entry => entry.name === name);
+  if (from < 0 || targetIndex < 0 || targetIndex >= items.length || from === targetIndex) return;
+  items.splice(targetIndex, 0, ...items.splice(from, 1));
+  applyGatewayDraft(items, direction && { name, direction });
 }
 
 function catalogView() {
@@ -313,25 +412,35 @@ function catalogView() {
       <button type="submit" class="button secondary">Salvar</button></form>`).join(''));
 }
 
-function trackingCards(channels) {
-  return channels.map(channel => panel(channel, `<div class="checks">${eventTypes.map(event =>
-    `<label><input type="checkbox" data-event="${event}" data-key="${channel}"${checked(state.settings.tracking[channel].includes(event))}>${event}</label>`).join('')}</div>
-    <form class="controls diagnostic-form" data-channel="${channel}">
-      <label>Cenário de teste<select name="mode">${(state.diagnostics?.[channel] || []).map(mode =>
-        `<option>${escape(mode)}</option>`).join('')}</select></label>
-      <button type="submit" class="button secondary">Enfileirar teste</button>
-    </form>`, 'Simulação')).join('');
+function channelSettings(channel) {
+  return `<div class="checks">${eventTypes.map(event =>
+    `<label><input type="checkbox" form="tracking-settings" data-pixel-event="${event}" data-key="${channel}"${checked((pendingTracking[channel] ?? state.settings.tracking[channel]).includes(event))}>${event}</label>`).join('')}</div>`;
+}
+
+function diagnosticButtons(channel, scenarios) {
+  return `<form class="controls diagnostic-form" data-channel="${channel}">${scenarios.map(([mode, label]) =>
+    `<button type="submit" name="mode" value="${escape(mode)}" class="button secondary">${escape(label)}</button>`).join('')}</form>`;
 }
 
 function pixelSettings() {
   const platforms = ['Meta', 'TikTok'];
-  const settings = platforms.map(channel => panel(`Pixel do ${channel}`, `<div class="checks">${eventTypes.map(event =>
-    `<label><input type="checkbox" data-pixel-event="${event}" data-key="${channel}"${checked((pendingTracking[channel] ?? state.settings.tracking[channel]).includes(event))}>${event}</label>`).join('')}</div>`, 'Simulação'));
+  const settings = platforms.map(channel => panel(`Pixel do ${channel}`, channelSettings(channel), 'Simulação'));
   const tests = platforms.map(channel => `<form class="controls diagnostic-form" data-channel="${channel}">
     <label>Cenário do ${channel}<select name="mode">${state.diagnostics[channel].map(mode => `<option>${escape(mode)}</option>`).join('')}</select></label>
     <button type="submit" class="button secondary">Testar ${channel}</button></form>`);
   return '<div class="stack"><form id="tracking-settings" class="stack">' + settings.join('') + '</form>' +
     panel('Teste rápido', '<div class="columns">' + tests.join('') + '</div>') + '</div>';
+}
+
+function utmfyView() {
+  return '<form id="tracking-settings" hidden></form>' +
+    panel('UTMfy', channelSettings('UTMfy'), 'Simulação') +
+    panel('Teste rápido', diagnosticButtons('UTMfy', [['PIX gerado', 'Testar PIX gerado'], ['PIX pago', 'Testar PIX pago']])) +
+    panel('Venda manual', diagnosticButtons('UTMfy', [['Venda manual', 'Enfileirar simulação']]), 'Simulação') +
+    panel('Pushcut', channelSettings('Pushcut') + diagnosticButtons('Pushcut', [['PIX gerado', 'Testar PIX gerado'], ['PIX pago', 'Testar PIX pago']]), 'Simulação') +
+    panel('Fila backend', table(['Canal', 'Evento', 'Estado', 'Tentativas'], state.queue.map(item =>
+      [escape(item.channel), escape(item.event), escape(item.status), item.attempts])),
+    `${state.queue.length} registros`);
 }
 
 function queueView() {
@@ -384,13 +493,46 @@ function pendingRemarketing() {
     '<form id="reminder-batch">' + actions + table(['Selecionar', 'Pedido', 'Gateway', 'Valor', 'Ação'], rows) + '</form>', 'Simulação');
 }
 
+function smsView() {
+  const pending = state.orders.length;
+  return '<form id="tracking-settings" hidden></form>' +
+    panel('Converta quem parou antes de pagar', `<div class="admin-hero"><div>
+      <h3>Remarketing de pedidos pendentes</h3>
+      <p>Enfileire lembretes e confira o andamento no ambiente de teste.</p></div>
+      <div class="admin-hero-highlight"><span>PIX pendentes</span><strong>${pending}</strong></div></div>`, 'Simulação') +
+    panel('Conexão da API', channelSettings('SMSMais'), 'Eventos de teste') +
+    panel('Webhook de entrega e respostas', diagnosticButtons('SMSMais', [['Retorno de entrega', 'Simular retorno de entrega']])) +
+    pendingRemarketing() +
+    panel('Teste de SMS', diagnosticButtons('SMSMais', [['SMS de teste', 'Testar SMS']])) +
+    panel('Torpedo de voz', diagnosticButtons('SMSMais', [['Torpedo de voz', 'Testar voz']])) +
+    panel('Estado da integração', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' ||
+      ['Lembrete de teste registrado', 'Lembretes de teste em lote'].includes(entry.title))));
+}
+
 async function render() {
   if (!operator) return;
   const current = ++sequence;
   const active = section();
   nav(active);
-  document.querySelector('.path').textContent = active === 'overview' ? 'Painel Administrativo' : sectionNames[active];
-  document.querySelector('#topbar-description').hidden = active !== 'overview';
+  const topbar = {
+    overview: ['Painel Administrativo', 'Visão geral de desempenho, funil e operação.'],
+    gateways: ['Gateways PIX', 'Central de roteamento, testes e conversão por gateway.'],
+    pages: ['Páginas', 'Acompanhe as etapas e a passagem de visitantes pelo funil.'],
+    tracking: ['Tracking', 'Configure os eventos do Meta e do TikTok no ambiente de teste.'],
+    audience: ['Público', 'Compare a distribuição das sessões em cada etapa.'],
+    sales: ['Vendas por gateway', 'Consulte as transações e a auditoria de faturamento simulado.'],
+    sms: ['Central de SMS', 'Acompanhe pedidos pendentes e teste o remarketing.'],
+    leads: ['Leads', 'Busque sessões, confira a jornada e consulte transações.'],
+    navigation: ['Saídas e retornos', 'Veja em quais páginas a jornada avançou ou teve retorno.'],
+    utmfy: ['UTMfy', 'Acompanhe a fila de testes do UTMfy e do Pushcut.'],
+    domains: ['Domínios', 'Consulte a origem do painel e o histórico de verificações.'],
+  };
+  const [heading, description] = topbar[active] || [sectionNames[active], ''];
+  document.body.dataset.admin = active;
+  document.querySelector('.path').textContent = heading;
+  const descriptionNode = document.querySelector('#topbar-description');
+  descriptionNode.textContent = description;
+  descriptionNode.hidden = !description;
   updateSettingsButton();
   view.setAttribute('aria-busy', 'true');
   try {
@@ -399,49 +541,35 @@ async function render() {
     const { data, traffic, journey, domains } = response;
     state = response.state;
     updateSettingsButton();
-    const placeholderHistory = (state.audit || []).filter(entry => ['UTMfy','Pushcut','SMSMais'].includes(entry.detail));
     const renderers = {
       overview: () => dashboard(data, traffic),
-      pages: () => title('Páginas e funil', 'Compare visitas registradas e sessões únicas nas etapas acompanhadas.') + liveControls() + '</div><div class="columns">' +
-        panel('Navegação registrada', '<p class="empty">As visitas aparecem quando o visitante permite métricas. O link abaixo abre uma jornada de teste do administrador.</p>' +
-          '<a href="/?analytics=demo" target="_blank" rel="noopener" class="button primary">Abrir jornada com tracking</a> ' +
-          '<button type="button" id="refresh-tracking" class="button secondary">Atualizar</button>' +
-          bars(traffic.rows.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
-          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões`) +
-        panel('Sessões únicas por etapa', bars(traffic.sessionsByPage.map(row => ({ name: trackedLabels[row.page], count: row.count })))) + '</div>',
+      pages: () => pagesView(traffic),
       leads: () => listView('leads', data),
       sales: () => listView('sales', data),
-      audience: () => title('Público', 'Distribuição das sessões registradas no período.') +
-        `<div class="controls">${range()}<a class="button secondary" href="/api/admin?${escape(params({ route: 'export', kind: 'audience' }))}">Exportar público CSV</a></div></div><div class="columns">` +
-        panel('Sessões por etapa', bars(traffic.sessionsByPage.filter(row => row.count).map(row =>
-          ({ name: trackedLabels[row.page], count: row.count })))) +
-        panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.filter(row => row.count).map(row =>
-          ({ name: trackedLabels[row.page], count: row.count })))) + '</div>',
+      audience: () => audienceView(traffic, data),
       catalog: catalogView,
-      gateways: () => gatewayView(data),
       tracking: () => title('Tracking', 'Configure os eventos e consulte a atividade registrada.') + range() + '</div><div class="stack">' +
         pixelSettings() + panel('Eventos do site', bars(response.pixel), response.limited ? 'Últimos 1.000 registros por consulta' : 'Medição própria') + '</div>',
-      utmfy: () => title('UTMfy e Pushcut', 'Valide eventos e notificações com registros de teste.') + '</div><div class="stack">' +
-        '<div class="columns">' + trackingCards(['UTMfy','Pushcut']) + '</div>' + panel('Histórico de testes', auditTable(placeholderHistory.filter(entry => entry.detail !== 'SMSMais'))) + '</div>',
-      sms: () => title('SMS e remarketing', 'Teste o registro de eventos da integração em modo de demonstração.') + '</div><div class="stack">' +
-        pendingRemarketing() + trackingCards(['SMSMais']) +
-        panel('Histórico de testes', auditTable(state.audit.filter(entry => entry.detail === 'SMSMais' ||
-          ['Lembrete de teste registrado', 'Lembretes de teste em lote'].includes(entry.title)))) + '</div>',
+      utmfy: utmfyView,
+      sms: smsView,
       queue: queueView,
       activity: () => title('Eventos da jornada', 'Acompanhe as ações registradas no protótipo, da primeira etapa até a seleção.') + range() + '</div>' +
         '<div class="stack">' + panel('Marcos registrados', bars(journey.milestones), journey.limited ? 'Últimos 1.000 eventos' : '') +
         panel('Eventos recentes', table(['Quando', 'Página', 'Evento'], journey.recent.map(row =>
           [date.format(new Date(row.at)), escape(row.page), escape(row.title)]))) + '</div>',
-      navigation: () => title('Saídas e retornos', 'Veja até onde as sessões avançaram e em quais páginas houve retorno pelo navegador.') + range() + '</div>' +
-        '<div class="columns">' + panel('Etapa mais avançada por sessão', bars(traffic.furthestPages.map(row => ({ name: trackedLabels[row.page], count: row.count }))),
-          traffic.limit ? 'Últimos 1.000 eventos' : `${integer.format(traffic.sessions)} sessões`) +
-        panel('Retornos por página', bars(journey.returns), journey.limited ? 'Últimos 1.000 eventos' : '') + '</div>',
+      navigation: () => navigationView(traffic, journey),
       domains: () => domainsView(domains),
       security: () => title('Auditoria e segurança', 'Histórico das mudanças feitas por operadores neste painel.') + '</div>' +
         panel('Atividade do painel', auditTable(state.audit)),
     };
     const keepFocus = document.activeElement?.id === 'live-refresh';
-    view.innerHTML = renderers[active]();
+    view.dataset.section = active;
+    if (active === 'gateways') {
+      gatewayMarkup ||= await gatewayTemplate();
+      if (current !== sequence || !operator) return;
+      gatewayReport = { data, traffic };
+      updateGatewayView();
+    } else view.innerHTML = renderers[active]();
     if (keepFocus) view.querySelector('#live-refresh')?.focus({ preventScroll: true });
   } catch (error) {
     if (current === sequence) notice(error.message, true);
@@ -455,9 +583,9 @@ navigation.addEventListener('click', event => {
   if (!link || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
   const url = new URL(link.href);
   event.preventDefault();
-  if (url.pathname === location.pathname && url.hash === location.hash) return;
-  history.pushState(null, '', url.pathname + url.hash);
-  window.dispatchEvent(new Event('hashchange'));
+  if (url.pathname === location.pathname && !location.hash) return;
+  history.pushState(null, '', url.pathname);
+  onNavigation();
 });
 
 async function command(type, key, value) {
@@ -478,6 +606,67 @@ function showDetails(titleText, content) {
   document.querySelector('#details-content').innerHTML = content;
   if (!details.open) details.showModal();
 }
+
+function openTransactionLookup() {
+  showDetails('Consultar transações', `<form id="lead-order-lookup" class="controls">
+    <label>Pedido ou código PIX de teste<input name="reference" required maxlength="100"></label>
+    <button type="submit" class="button primary">Consultar</button><p class="muted" role="status"></p>
+  </form>`);
+  details.querySelector('[name=reference]').focus();
+}
+
+function openGatewayTests(provider) {
+  if (!state?.settings?.gateways) return;
+  const options = state.settings.gateways.map(entry => `<label class="gateway-test-option">
+    <input type="checkbox" name="provider" value="${escape(entry.name)}"${checked(provider ? provider === entry.name : entry.enabled)}>
+    <span>${escape(entry.name)}</span><small>${entry.enabled ? 'Ligado' : 'Desligado'}</small></label>`);
+  showDetails('Testar gateways', `<form id="gateway-test-form">
+    <p class="muted">Execute o diagnóstico no ambiente de simulação.</p>
+    <div class="gateway-test-option-grid">${options.join('')}</div>
+    <button class="button primary" type="submit">Executar testes</button>
+    <div class="gateway-test-results" role="status"></div>
+  </form>`);
+}
+
+testGateways.addEventListener('click', () => openGatewayTests());
+
+gatewaySettings.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!gatewayDraft || updatesInFlight) return;
+  const submitted = gatewayDraft;
+  saveSettings.disabled = true;
+  view.inert = true;
+  try {
+    await command('gateway-settings', null, submitted);
+    gatewayDraft = undefined;
+  } catch (error) {
+    notice(error.message, true);
+    await render();
+  } finally {
+    view.inert = false;
+    updateSettingsButton();
+  }
+});
+
+view.addEventListener('dragstart', event => {
+  const row = event.target.closest('[data-gateway-order-item]');
+  if (!row || !event.dataTransfer) return;
+  row.classList.add('is-dragging');
+  event.dataTransfer.setData('text/plain', row.dataset.gatewayOrderItem);
+  event.dataTransfer.effectAllowed = 'move';
+});
+view.addEventListener('dragover', event => {
+  if (view.querySelector('.is-dragging') && event.target.closest('[data-gateway-order-item]')) event.preventDefault();
+});
+view.addEventListener('dragend', () => view.querySelector('.is-dragging')?.classList.remove('is-dragging'));
+view.addEventListener('drop', event => {
+  const row = event.target.closest('[data-gateway-order-item]');
+  const source = view.querySelector('.is-dragging');
+  if (!row || !source) return;
+  event.preventDefault();
+  const index = (gatewayDraft ?? state.settings.gateways).findIndex(entry => entry.name === row.dataset.gatewayOrderItem);
+  moveGateway(source.dataset.gatewayOrderItem, index);
+});
 
 async function showOrder(id) {
   const response = await fetch(`/api/admin?${params({ route: 'order', id })}`);
@@ -503,6 +692,29 @@ async function showOrder(id) {
 }
 
 details.addEventListener('submit', async event => {
+  if (event.target.id === 'gateway-test-form') {
+    event.preventDefault();
+    const form = event.target;
+    const selected = new FormData(form).getAll('provider');
+    const results = form.querySelector('.gateway-test-results');
+    if (!selected.length) {
+      results.textContent = 'Selecione ao menos um gateway.';
+      return;
+    }
+    event.submitter.disabled = true;
+    results.textContent = 'Executando testes…';
+    try {
+      const result = await command('pix-batch', null, selected);
+      results.innerHTML = result.checks.map(({ name, code }) => `<section class="gateway-test-card">
+        <strong>${escape(name)}</strong><p>${code ? 'PIX de teste gerado' : 'Gateway desligado'}</p>
+        ${code ? `<code>${escape(code)}</code>` : ''}</section>`).join('');
+    } catch (error) {
+      results.textContent = error.message;
+    } finally {
+      event.submitter.disabled = false;
+    }
+    return;
+  }
   if (event.target.id !== 'lead-order-lookup') return;
   event.preventDefault();
   const reference = new FormData(event.target).get('reference').trim();
@@ -550,20 +762,26 @@ document.querySelector('#logout').addEventListener('click', async () => {
   try { await api('logout', {}); account(null); notice(''); } catch (error) { notice(error.message, true); }
 });
 
-window.addEventListener('hashchange', async () => {
+let shownLocation = location.pathname + location.hash;
+async function onNavigation() {
+  const current = location.pathname + location.hash;
+  if (current === shownLocation) return;
+  shownLocation = current;
   leadDialog.close();
   Object.assign(contexts, { q: '', page: 1, gateway: '', status: '' });
   notice('');
   scheduleRefresh();
   await render();
   openLinkedLead();
-});
+}
+window.addEventListener('hashchange', onNavigation);
+window.addEventListener('popstate', onNavigation);
 document.addEventListener('visibilitychange', scheduleRefresh);
 
 view.addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.target;
-  const entries = Object.fromEntries(new FormData(form));
+  const entries = Object.fromEntries(new FormData(form, event.submitter || undefined));
   if (form.id === 'date-filter') {
     if (!entries.from && !entries.to && form.querySelector('#period').value !== 'custom') return;
     if (!entries.from || !entries.to || entries.from > entries.to || Date.parse(entries.to) - Date.parse(entries.from) > 89 * 86400000) {
@@ -630,6 +848,13 @@ view.addEventListener('change', async event => {
     await render();
     return;
   }
+  if (target.dataset.gatewayEnabled) {
+    applyGatewayDraft((gatewayDraft ?? state.settings.gateways).map(entry =>
+      entry.name === target.dataset.gatewayEnabled ? { ...entry, enabled: target.checked } : entry));
+    [...view.querySelectorAll('[data-gateway-enabled]')].find(input => input.dataset.gatewayEnabled === target.dataset.gatewayEnabled)
+      ?.focus({ preventScroll: true });
+    return;
+  }
   if (target.dataset.dashboardSetting) {
     const key = target.dataset.dashboardSetting;
     if (target.checked === state.settings[key]) delete pendingSettings[key];
@@ -647,14 +872,6 @@ view.addEventListener('change', async event => {
     updateSettingsButton();
     return;
   }
-  try {
-    if (target.dataset.change) await command(target.dataset.change, target.dataset.key, target.checked);
-    if (target.dataset.event) {
-      const on = [...view.querySelectorAll('input[data-event]:checked')]
-        .filter(input => input.dataset.key === target.dataset.key).map(input => input.dataset.event);
-      await command('tracking', target.dataset.key, on);
-    }
-  } catch (error) { notice(error.message, true); await render(); }
 });
 
 view.addEventListener('click', async event => {
@@ -674,28 +891,36 @@ view.addEventListener('click', async event => {
       scheduleRefresh();
     }
     if (button.id === 'refresh-tracking') await render();
-    if (button.id === 'refresh-leads') await render();
-    if (button.id === 'lookup-leads') {
-      showDetails('Consultar transações', `<form id="lead-order-lookup" class="controls">
-        <label>Pedido ou código PIX de teste<input name="reference" required maxlength="100"></label>
-        <button type="submit" class="button primary">Consultar</button><p class="muted" role="status"></p>
-      </form>`);
-      details.querySelector('[name=reference]').focus();
-    }
+    if (button.id === 'refresh-leads' || button.id === 'gateway-refresh') await render();
+    if (button.id === 'lookup-leads' || button.id === 'gateway-lookup') openTransactionLookup();
     if (button.id === 'process-queue') await command('queue-process');
     if (button.id === 'select-reminders') {
       const boxes = [...button.form.querySelectorAll('input[name="reminder"]')];
       boxes.forEach((box, index) => { box.checked = index < 20; });
     }
+    if (button.dataset.salesGateway) {
+      contexts.gateway = contexts.gateway === button.dataset.salesGateway ? '' : button.dataset.salesGateway;
+      contexts.page = 1;
+      await render();
+    }
     if (button.dataset.order) await showOrder(button.dataset.order);
     if (button.dataset.reminder) await command('order-reminder', button.dataset.reminder);
     if (button.dataset.page) { contexts.page = Number(button.dataset.page); await render(); }
-    if (button.dataset.priority) await command('priority', button.dataset.key, Number(button.dataset.priority));
-    if (button.dataset.pix) {
-      const result = await command('pix', button.dataset.pix);
-      showDetails('PIX de teste', `<p class="muted">Identificador de simulação para ${escape(result.detail)}.</p>
-        <p class="empty">${escape(result.code)}</p><p>Este teste não gera cobrança.</p>`);
+    if (button.dataset.gatewayOrderMove) {
+      const name = button.closest('[data-gateway-order-item]').dataset.gatewayOrderItem;
+      const direction = button.dataset.gatewayOrderMove;
+      const index = (gatewayDraft ?? state.settings.gateways).findIndex(entry => entry.name === name);
+      moveGateway(name, index + (direction === 'up' ? -1 : 1), direction);
     }
+    if (button.matches('[data-gateway-config-toggle]')) {
+      const card = button.closest('[data-gateway-card]');
+      const name = card.dataset.gatewayCard;
+      const open = !expandedGateways.has(name);
+      if (open) expandedGateways.add(name);
+      else expandedGateways.delete(name);
+      setGatewayCardOpen(card, open);
+    }
+    if (button.dataset.testProvider) openGatewayTests(button.dataset.testProvider);
   } catch (error) { notice(error.message, true); }
 });
 
